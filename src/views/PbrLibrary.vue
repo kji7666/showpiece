@@ -248,12 +248,12 @@ const onPaymentSuccess = (itemId) => {
         </div>
         <div class="h-6 w-px bg-gray-700 hidden sm:block"></div>
         <div class="flex items-center gap-2">
-          <span class="text-sm text-gray-500">價格:</span>
+          <!-- <span class="text-sm text-gray-500">價格:</span>
           <select v-model="priceFilter" class="bg-gray-800 text-white text-sm border border-gray-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-gray-400">
             <option value="All">全部顯示</option>
             <option value="Free">免費 (Free)</option>
             <option value="Premium">付費 (Premium)</option>
-          </select>
+          </select> -->
         </div>
       </div>
     </div>
@@ -285,7 +285,7 @@ const onPaymentSuccess = (itemId) => {
           <div class="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
           <div class="absolute top-3 right-3">
              <span v-if="item.isPremium" class="bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded shadow-md">PREMIUM ${{ item.price }}</span>
-             <span v-else class="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded shadow-md">FREE</span>
+             <!-- <span v-else class="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded shadow-md">FREE</span> -->
           </div>
         </div>
         <div class="p-6">
@@ -346,7 +346,7 @@ const onPaymentSuccess = (itemId) => {
                        ${{ selectedMaterial.price }} USD
                     </span>
                     <span v-else class="px-3 py-1 bg-green-100 text-green-800 text-sm font-bold rounded-full">
-                       FREE
+                       <!-- FREE -->
                     </span>
                     <span v-if="userStore.hasPurchased(selectedMaterial.id)" class="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-bold rounded-full border border-blue-200 flex items-center gap-1">
                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
