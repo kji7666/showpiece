@@ -57,7 +57,7 @@ const handleRegister = async () => {
     // 3. 成功後處理
     console.log('註冊成功:', response);
     userStore.login(response.user, response.token);
-    alert('註冊成功！歡迎加入 PBR Master');
+    alert('註冊成功！歡迎加入嘉樂秀圖網');
     
     // 導向回首頁 (或登入頁)
     router.push('/');
@@ -76,7 +76,7 @@ const handleRegister = async () => {
     
     <!-- 標題區 -->
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center mb-8">
-      <h2 class="text-3xl font-extrabold text-white">加入 PBR Master</h2>
+      <h2 class="text-3xl font-extrabold text-white">加入嘉樂秀圖網</h2>
       <p class="mt-2 text-sm text-gray-400">
         建立帳戶以解鎖 
         <span class="text-blue-500 font-medium">8K 高畫質下載</span> 與 

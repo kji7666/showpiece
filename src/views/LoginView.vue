@@ -55,7 +55,7 @@ const handleLogin = async () => {
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center mb-8">
       <h2 class="text-3xl font-extrabold text-white">歡迎回來</h2>
       <p class="mt-2 text-sm text-gray-400">
-        登入您的 PBR Master 帳戶
+        登入您的帳戶
       </p>
     </div>
 

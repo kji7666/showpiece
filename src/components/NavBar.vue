@@ -14,7 +14,7 @@ userStore.init();
 const navItems = [
   { name: '首頁', path: '/' },
   { name: 'PBR 材質庫', path: '/pbr' },
-  { name: '加入 LINE', path: '/contact' }
+//   { name: '加入 LINE', path: '/contact' }
 ];
 
 // 4. 手機版選單開關狀態
