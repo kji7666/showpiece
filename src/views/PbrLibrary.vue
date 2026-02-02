@@ -277,7 +277,7 @@ const onPaymentSuccess = (itemId) => {
           <template v-if="item.type === 'variant'">
             <div class="flex items-start justify-between mb-1">
               <h3 class="text-xl font-bold text-gray-900">{{ item.code }}</h3>
-              <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">變體</span>
+              <!-- <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">變體</span> -->
             </div>
             <p class="text-sm text-gray-500 mb-2">{{ item.parentName }}</p>
             <div class="mt-auto">
