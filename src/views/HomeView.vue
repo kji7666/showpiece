@@ -10,7 +10,6 @@ const router = useRouter();
 const heroSlides = [
   {
     id: 1,
-    // 這裡建議換成您上傳到 Supabase Storage 的公開連結，或是外部圖床連結
     image: 'display1.jpg', 
     title: '提供高品質物理渲染材質',
     subtitle: 'Provides high-quality physically rendered materials'
@@ -44,7 +43,7 @@ const setSlide = (index) => {
   startSlideShow();
 };
 
-// --- 2. 特色介紹資料 ---
+// --- 2. 特色介紹資料 (在此處修改) ---
 const features = [
   {
     title: 'PBR材質貼圖',
@@ -54,12 +53,8 @@ const features = [
   {
     title: '官方網站',
     desc: '目前，由於我們剛起步，材料數量有限，但我們會努力補充更多內容。如果使用者在使用過程中有任何需要改善的地方，歡迎到如藝官網，透過電子郵件聯絡我們，我們將竭誠為您服務。',
-    icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'
-  },
-  {
-    title: 'LINE',
-    desc: '另外印刷品是我公司平常接案產品，如果有印刷也歡迎洽購，歡迎您加入LINE如有新作品我們會優先放在官網上讓您優先取得',
-    icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+    icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
+    link: 'https://joyprint.com.tw/' // 新增連結屬性
   }
 ];
 
@@ -68,7 +63,6 @@ const trendingMaterials = ref([]);
 
 const fetchTrending = async () => {
   try {
-    // 抓取最新的 4 筆資料
     const { data, error } = await supabase
       .from('materials')
       .select('*')
@@ -79,7 +73,6 @@ const fetchTrending = async () => {
 
     trendingMaterials.value = data.map(item => {
       let imageUrl = item.cover_image;
-      // 處理圖片路徑：如果是相對路徑，補上 Supabase Storage 前綴
       if (item.cover_image && !item.cover_image.startsWith('http')) {
          const { data } = supabase.storage.from('pbr-files').getPublicUrl(item.cover_image);
          imageUrl = data.publicUrl;
@@ -143,10 +136,9 @@ const showCopyright = () => {
   });
 };
 
-// --- 生命週期 ---
 onMounted(() => {
   startSlideShow();
-  fetchTrending(); // 抓取真實資料
+  fetchTrending(); 
 });
 
 onUnmounted(() => {
@@ -157,38 +149,26 @@ onUnmounted(() => {
 <template>
   <div class="flex flex-col min-h-screen">
     
-    <!-- 1. Hero Section: 輪播視覺區 -->
+    <!-- 1. Hero Section -->
     <section class="relative h-[600px] overflow-hidden bg-gray-900">
-      
-      <!-- 輪播圖片層 -->
       <div 
         v-for="(slide, index) in heroSlides" 
         :key="slide.id"
         class="absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out"
         :class="index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'"
       >
-        <img 
-          :src="slide.image" 
-          :alt="slide.title" 
-          class="w-full h-full object-cover"
-        />
+        <img :src="slide.image" :alt="slide.title" class="w-full h-full object-cover"/>
         <div class="absolute inset-0 bg-gradient-to-b from-black/70 via-black/40 to-[#121212]"></div>
       </div>
 
-      <!-- 文字內容層 -->
       <div class="absolute inset-0 z-20 flex items-center justify-center text-center px-4">
         <div class="max-w-4xl mx-auto w-full flex flex-col items-center">
-        
-          
-          <!-- 動態文字容器 -->
           <div class="relative w-full h-40 md:h-56 mb-8">
             <div 
               v-for="(slide, index) in heroSlides" 
               :key="'text-' + slide.id"
               class="absolute inset-0 flex flex-col items-center justify-center transition-all duration-1000 ease-out"
-              :class="index === currentSlide 
-                ? 'opacity-100 translate-y-0 delay-300' 
-                : 'opacity-0 translate-y-8 pointer-events-none'"
+              :class="index === currentSlide ? 'opacity-100 translate-y-0 delay-300' : 'opacity-0 translate-y-8 pointer-events-none'"
             >
               <h1 class="text-5xl md:text-7xl font-extrabold text-white tracking-tight mb-6 drop-shadow-xl">
                 {{ slide.title }}
@@ -198,26 +178,17 @@ onUnmounted(() => {
               </p>
             </div>
           </div>
-          
           <div class="flex flex-col sm:flex-row gap-4 justify-center relative z-30">
-            <RouterLink 
-              to="/pbr" 
-              class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-lg transition-transform hover:scale-105 shadow-lg shadow-blue-600/30"
-            >
+            <RouterLink to="/pbr" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-lg transition-transform hover:scale-105 shadow-lg shadow-blue-600/30">
               瀏覽材質庫
             </RouterLink>
-            <RouterLink 
-              to="/signup" 
-              class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white border border-white/30 rounded-lg font-bold text-lg transition-colors backdrop-blur-sm"
-            >
+            <RouterLink to="/signup" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white border border-white/30 rounded-lg font-bold text-lg transition-colors backdrop-blur-sm">
               免費加入會員
             </RouterLink>
           </div>
-
         </div>
       </div>
 
-      <!-- 輪播指示點 -->
       <div class="absolute bottom-8 left-0 right-0 z-30 flex justify-center gap-3">
         <button 
           v-for="(slide, index) in heroSlides" 
@@ -227,10 +198,9 @@ onUnmounted(() => {
           :class="index === currentSlide ? 'bg-blue-500 w-8' : 'bg-white/50 hover:bg-white'"
         ></button>
       </div>
-
     </section>
 
-    <!-- 2. Features: 特色介紹 -->
+    <!-- 2. Features: 特色介紹 (在此處修改) -->
     <section class="py-20 bg-[#121212]">
       <div class="container mx-auto px-6">
         <div class="text-center mb-16">
@@ -238,21 +208,36 @@ onUnmounted(() => {
           <p class="text-gray-400">嘉樂秀圖網是由如藝印製品企業有限公司建立的平台。<br></br>我們的初衷是為服務本公司的客戶群，幫助客戶將產品轉換成3D建材檔。</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
+        <!-- 修改點：grid-cols-3 改為 grid-cols-2 以平均分配 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
           <div v-for="feature in features" :key="feature.title" class="bg-gray-800/50 p-8 rounded-2xl border border-gray-700/50 hover:bg-gray-800 transition-colors">
             <div class="w-14 h-14 bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-400 mb-6">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="feature.icon" />
               </svg>
             </div>
-            <h3 class="text-xl font-bold text-white mb-3">{{ feature.title }}</h3>
+            
+            <h3 class="text-xl font-bold text-white mb-3">
+              <!-- 修改點：加入連結判斷 -->
+              <a 
+                v-if="feature.link" 
+                :href="feature.link" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                class="text-blue-400 hover:text-blue-300 transition-colors hover:underline underline-offset-4"
+              >
+                {{ feature.title }}
+              </a>
+              <span v-else>{{ feature.title }}</span>
+            </h3>
+            
             <p class="text-gray-400 leading-relaxed">{{ feature.desc }}</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 3. Showcase: 熱門素材展示 (真實資料) -->
+    <!-- 3. Showcase -->
     <section class="py-20 bg-gray-900">
       <div class="container mx-auto px-6">
         <div class="flex justify-between items-end mb-10">
@@ -295,7 +280,7 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <!-- 4. 軟體支援度對照表 -->
+    <!-- 4. Software Support -->
     <section class="py-20 bg-[#181818]">
       <div class="container mx-auto px-6">
         <div class="text-center mb-12">
@@ -344,33 +329,19 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <!-- 6. Footer: 簡易頁腳 (含著作權聲明與官網連結) -->
+    <!-- 6. Footer -->
     <footer class="bg-black py-10 border-t border-gray-800">
       <div class="container mx-auto px-6 text-center">
-        
         <h2 class="text-2xl font-bold text-white mb-4">PBR Master</h2>
-        
         <div class="flex justify-center items-center gap-6 text-gray-400 mb-8">
-          <!-- 點擊觸發彈窗 -->
-          <button 
-            @click="showCopyright" 
-            class="hover:text-white transition-colors text-sm font-medium border-b border-transparent hover:border-white pb-0.5"
-          >
+          <button @click="showCopyright" class="hover:text-white transition-colors text-sm font-medium border-b border-transparent hover:border-white pb-0.5">
             著作權聲明 (Copyright Notice)
           </button>
-
           <span class="text-gray-700">|</span>
-
-          <!-- 如藝官網連結 (請替換 href) -->
-          <a 
-            href="https://joyprint.com.tw/" 
-            target="_blank"
-            class="hover:text-white transition-colors text-sm font-medium border-b border-transparent hover:border-white pb-0.5"
-          >
+          <a href="https://joyprint.com.tw/" target="_blank" class="hover:text-white transition-colors text-sm font-medium border-b border-transparent hover:border-white pb-0.5">
             如藝官網
           </a>
         </div>
-
         <p class="text-gray-600 text-sm">
           &copy; 2024 PBR Master. All rights reserved. 
           <br>Designed for Professionals.
