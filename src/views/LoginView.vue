@@ -56,9 +56,11 @@ const handleForgotPassword = async () => {
     showCancelButton: true,
     confirmButtonText: '發送重設信',
     cancelButtonText: '取消',
-    background: '#1E1E1E',
-    color: '#fff',
-    customClass: { input: 'text-black' }
+    // 修改彈窗配色為亮色系
+    background: '#fff',
+    color: '#333',
+    confirmButtonColor: '#005eb8',
+    customClass: { input: 'text-gray-900 border-gray-300' }
   });
 
   if (email) {
@@ -68,8 +70,9 @@ const handleForgotPassword = async () => {
         icon: 'success',
         title: '已發送！',
         text: '請檢查您的信箱，點擊信中連結來設定新密碼。',
-        background: '#1E1E1E',
-        color: '#fff'
+        background: '#fff',
+        color: '#333',
+        confirmButtonColor: '#005eb8'
       });
     } catch (error) {
       toast.error('發送失敗：' + error.message);
@@ -79,36 +82,39 @@ const handleForgotPassword = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#121212] flex flex-col justify-center py-12 sm:px-6 lg:px-8 pt-24">
+  <!-- 背景改為淺灰 -->
+  <div class="min-h-screen bg-[#f5f7fa] flex flex-col justify-center py-12 sm:px-6 lg:px-8 pt-24 font-sans text-gray-800">
     
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center mb-8">
-      <h2 class="text-3xl font-extrabold text-white">歡迎回來</h2>
-      <p class="mt-2 text-sm text-gray-400">
+      <!-- 文字顏色改為深色 -->
+      <h2 class="text-3xl font-extrabold text-[#333]">歡迎回來</h2>
+      <p class="mt-2 text-sm text-gray-600">
         登入您的帳戶
       </p>
     </div>
 
     <div class="sm:mx-auto sm:w-full sm:max-w-md">
-      <div class="bg-[#1E1E1E] py-8 px-4 shadow-2xl shadow-black/50 sm:rounded-xl sm:px-10 border border-gray-800">
+      <!-- 卡片改為白底、淺灰邊框、陰影 -->
+      <div class="bg-white py-8 px-4 shadow-xl sm:rounded-xl sm:px-10 border border-gray-200">
         
         <form class="space-y-6" @submit.prevent="handleLogin">
           
           <!-- Email 輸入框 -->
           <div>
-            <label for="email" class="block text-sm font-medium text-gray-300">電子郵件</label>
+            <label for="email" class="block text-sm font-bold text-gray-700">電子郵件</label>
             <div class="mt-1">
-              <input v-model="form.email" id="email" type="email" required class="input-dark" placeholder="name@company.com" />
+              <input v-model="form.email" id="email" type="email" required class="input-light" placeholder="name@company.com" />
             </div>
           </div>
 
-          <!-- 密碼輸入框 (這裡之前不見了，現在補回來) -->
+          <!-- 密碼輸入框 -->
           <div>
             <div class="flex justify-between items-center mb-1">
-               <label for="password" class="block text-sm font-medium text-gray-300">密碼</label>
-               <a href="#" @click.prevent="handleForgotPassword" class="text-xs text-blue-500 hover:text-blue-400">忘記密碼?</a>
+               <label for="password" class="block text-sm font-bold text-gray-700">密碼</label>
+               <a href="#" @click.prevent="handleForgotPassword" class="text-xs text-[#005eb8] hover:text-[#004a91] hover:underline">忘記密碼?</a>
             </div>
             <div class="mt-1">
-              <input v-model="form.password" id="password" type="password" required class="input-dark" placeholder="••••••••" />
+              <input v-model="form.password" id="password" type="password" required class="input-light" placeholder="••••••••" />
             </div>
           </div>
 
@@ -117,7 +123,7 @@ const handleForgotPassword = async () => {
             <button 
               type="submit" 
               :disabled="isLoading"
-              class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              class="w-full flex justify-center py-3 px-4 border border-transparent rounded text-sm font-bold text-white bg-[#005eb8] hover:bg-[#004a91] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#005eb8] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               <svg v-if="isLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -129,9 +135,9 @@ const handleForgotPassword = async () => {
         </form>
 
         <div class="mt-6 text-center">
-          <p class="text-sm text-gray-400">
+          <p class="text-sm text-gray-600">
             還沒有帳號？
-            <RouterLink to="/signup" class="font-medium text-blue-500 hover:text-blue-400">
+            <RouterLink to="/signup" class="font-bold text-[#005eb8] hover:text-[#004a91] hover:underline">
               免費註冊
             </RouterLink>
           </p>
@@ -143,7 +149,8 @@ const handleForgotPassword = async () => {
 </template>
 
 <style scoped>
-.input-dark {
-  @apply block w-full px-4 py-3 bg-[#2A2A2A] border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all;
+/* 輸入框改為亮色系：白底、灰框、深字、藍色 Focus */
+.input-light {
+  @apply block w-full px-4 py-3 bg-white border border-gray-300 rounded text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#005eb8] focus:border-transparent outline-none transition-all shadow-sm;
 }
 </style>
