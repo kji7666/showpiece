@@ -49,14 +49,15 @@ const fetchMaterials = async () => {
       variants: item.material_variants ? item.material_variants.map(v => ({
         type: 'variant', // 標記這是 Variant 類型
         id: v.id,
-        parentId: item.id, // 紀錄父層 ID 以便判斷權限
-        parentName: item.name, // 搜尋時顯示用
-        brand: item.brand,     // 搜尋時顯示用
+        parentId: item.id, 
+        parentName: item.name, 
+        brand: item.brand,     
+        parentCategory: item.category, // [新增] 將父層分類傳給變體，方便搜尋顯示或其他用途
         code: v.code,
         image: v.image || item.cover_image,
-        description: item.description, // 繼承父層描述
-        price: Number(item.price),     // 繼承父層價格
-        isPremium: item.is_premium,    // 繼承父層權限
+        description: item.description, 
+        price: Number(item.price),     
+        isPremium: item.is_premium,    
         files: {
           '1K': v.file_path_1k,
           '2K': v.file_path_2k,
@@ -81,7 +82,7 @@ onUnmounted(() => {
   document.body.style.overflow = ''; 
 });
 
-// --- 2. 搜尋與混合顯示邏輯 (核心修改) ---
+// --- 2. 搜尋與混合顯示邏輯 (修改點：加入 Category 搜尋) ---
 const searchQuery = ref('');
 
 const displayItems = computed(() => {
@@ -93,33 +94,29 @@ const displayItems = computed(() => {
   }
 
   // 情況 B：有搜尋 -> 攤平並顯示符合的「變體 (Variants)」
-  // 我們會遍歷所有產品，把符合條件的變體抓出來變成一個大陣列
   const results = [];
 
   rawMaterials.value.forEach(parent => {
-    // 檢查變體
     if (parent.variants && parent.variants.length > 0) {
       parent.variants.forEach(variant => {
-        // 搜尋邏輯：檢查 變體代號 OR 產品名稱 OR 廠商
+        // [修改重點] 搜尋邏輯：檢查 變體代號 OR 產品名稱 OR 廠商 OR 材質分類
         const isMatch = 
           (variant.code || '').toLowerCase().includes(term) ||
           (parent.name || '').toLowerCase().includes(term) ||
-          (parent.brand || '').toLowerCase().includes(term);
+          (parent.brand || '').toLowerCase().includes(term) ||
+          (parent.category || '').toLowerCase().includes(term); // 加入這一行
 
         if (isMatch) {
-          results.push(variant); // 推入變體物件
+          results.push(variant); 
         }
       });
-    } else {
-      // (選用) 如果產品沒有變體，但產品本身名稱符合，也可以推入產品
-      // 但為了統一介面，這裡暫時只處理有變體的情況，或視需求開啟
     }
   });
 
   return results;
 });
 
-// --- 3. 彈窗邏輯 (區分 Parent 和 Variant) ---
+// --- 3. 彈窗邏輯 ---
 const selectedItem = ref(null);
 const isModalOpen = ref(false);
 const isPayModalOpen = ref(false); 
@@ -139,10 +136,7 @@ const closeDetail = () => {
 
 // --- 4. 下載功能 ---
 const handleDownload = (item, variantCode, resolution) => {
-  // 如果是變體模式，item 就是變體本身，variantCode 可能沒傳(或直接用 item.code)
-  
   if (!userStore.isLoggedIn) {
-    // ... (登入檢查保持不變)
     Swal.fire({
       title: '需要會員權限',
       text: "下載此材質需要登入會員，是否前往登入？",
@@ -160,30 +154,24 @@ const handleDownload = (item, variantCode, resolution) => {
     return;
   }
 
-  // 判斷權限 (注意：Parent 和 Variant 的 id 結構略有不同)
   const targetId = item.type === 'variant' ? item.parentId : item.id;
-  
   const alreadyPurchased = userStore.hasPurchased(targetId);
   
   if (item.isPremium && !alreadyPurchased && item.price > 0) {
-    // 這裡要傳入正確的購買對象 (通常是 Parent ID)
     payTarget.value = item.type === 'variant' ? { ...item, id: item.parentId, name: item.parentName } : item;
     isPayModalOpen.value = true;
     return;
   }
 
-  // 取得檔案路徑
   let filePath = '';
   let finalName = '';
   let finalCode = '';
 
   if (item.type === 'variant') {
-    // 變體模式
     filePath = item.files[resolution];
     finalName = item.parentName;
     finalCode = item.code;
   } else {
-    // 產品模式 (從 variants 陣列找)
     const v = item.variants.find(v => v.code === variantCode);
     if (v) filePath = v.files[resolution];
     finalName = item.name;
@@ -235,7 +223,8 @@ const onPaymentSuccess = (itemId) => {
           <p class="text-gray-400">精選高品質建築與室內設計材質</p>
         </div>
         <div class="relative w-full md:w-auto">
-          <input v-model="searchQuery" type="text" placeholder="搜尋材質代號 (ST-01)、品名或廠商..." class="bg-gray-800 border border-gray-700 text-white px-4 py-2 pl-10 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-96 transition-all">
+          <!-- 修改 placeholder 提示文字 -->
+          <input v-model="searchQuery" type="text" placeholder="搜尋代號、品名、廠商或材質(如:木地板)..." class="bg-gray-800 border border-gray-700 text-white px-4 py-2 pl-10 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-96 transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-3 top-2.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </div>
       </div>
@@ -251,11 +240,10 @@ const onPaymentSuccess = (itemId) => {
       <button @click="fetchMaterials" class="mt-4 text-blue-400 underline">重試</button>
     </div>
 
-    <!-- Grid List (會根據搜尋狀態顯示不同內容) -->
+    <!-- Grid List -->
     <div v-else class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       <div v-for="item in displayItems" :key="item.type === 'parent' ? item.id : item.id" class="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 group cursor-pointer animate-fadeIn flex flex-col" @click="openDetail(item)">
         
-        <!-- 圖片區塊 -->
         <div class="relative aspect-square bg-gray-50 border-b border-gray-100">
           <img 
             :src="item.image" 
@@ -264,22 +252,22 @@ const onPaymentSuccess = (itemId) => {
             @error="$event.target.src = 'https://placehold.co/600x400?text=No+Image'"
           >
           <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
-          
-          <!-- Premium Tag -->
           <div class="absolute top-2 right-2">
              <span v-if="item.isPremium" class="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">PREMIUM</span>
           </div>
         </div>
 
-        <!-- 資訊區塊 (區分顯示內容) -->
         <div class="p-4 flex-1 flex flex-col">
-          <!-- 如果是 Variant (搜尋結果) -->
+          <!-- Variant Mode -->
           <template v-if="item.type === 'variant'">
             <div class="flex items-start justify-between mb-1">
               <h3 class="text-xl font-bold text-gray-900">{{ item.code }}</h3>
               <!-- <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">變體</span> -->
             </div>
             <p class="text-sm text-gray-500 mb-2">{{ item.parentName }}</p>
+            <!-- 顯示分類提示 (選用) -->
+            <p v-if="item.parentCategory" class="text-xs text-gray-400 mb-2">{{ item.parentCategory }}</p>
+            
             <div class="mt-auto">
                <button class="w-full py-2 bg-blue-50 text-blue-600 font-bold rounded hover:bg-blue-600 hover:text-white transition-colors text-sm">
                   下載檔案
@@ -287,7 +275,7 @@ const onPaymentSuccess = (itemId) => {
             </div>
           </template>
 
-          <!-- 如果是 Parent (預設列表) -->
+          <!-- Parent Mode -->
           <template v-else>
             <div class="flex items-start justify-between mb-1">
               <h3 class="text-xl font-bold text-gray-900 truncate">{{ item.name }}</h3>
@@ -303,14 +291,13 @@ const onPaymentSuccess = (itemId) => {
         </div>
       </div>
 
-      <!-- No Results -->
       <div v-if="displayItems.length === 0" class="col-span-full py-20 text-center">
         <h3 class="text-xl font-bold text-white mb-2">找不到符合 "{{ searchQuery }}" 的材質</h3>
         <button @click="searchQuery = ''" class="text-blue-400 hover:text-blue-300 underline font-medium">清除搜尋</button>
       </div>
     </div>
 
-    <!-- Smart Modal (根據點擊項目顯示不同介面) -->
+    <!-- Smart Modal -->
     <div v-if="isModalOpen" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
       <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="closeDetail"></div>
       
@@ -319,7 +306,7 @@ const onPaymentSuccess = (itemId) => {
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
 
-        <!-- 模式 A: 搜尋到的單一變體 (Variant Mode) -->
+        <!-- Mode A: Single Variant -->
         <div v-if="selectedItem.type === 'variant'" class="flex flex-col md:flex-row min-h-[400px]">
           <div class="md:w-1/2 bg-gray-50 p-8 flex items-center justify-center">
              <img :src="selectedItem.image" class="max-w-full max-h-[400px] object-contain shadow-md" @error="$event.target.src = 'https://placehold.co/600x400?text=No+Image'">
@@ -327,7 +314,8 @@ const onPaymentSuccess = (itemId) => {
           <div class="md:w-1/2 p-8 flex flex-col justify-center">
              <span class="text-green-600 font-bold tracking-wider text-sm mb-1">{{ selectedItem.brand }}</span>
              <h2 class="text-4xl font-extrabold text-gray-900 mb-2">{{ selectedItem.code }}</h2>
-             <p class="text-xl text-gray-500 mb-6">{{ selectedItem.parentName }}</p>
+             <p class="text-xl text-gray-500 mb-2">{{ selectedItem.parentName }}</p>
+             <span class="inline-block bg-gray-100 text-gray-600 px-2 py-1 text-xs rounded mb-6 w-fit">{{ selectedItem.parentCategory }}</span>
              
              <div class="bg-gray-50 p-4 rounded-lg mb-8 text-sm text-gray-600">
                 {{ selectedItem.description || '暫無描述' }}
@@ -342,7 +330,7 @@ const onPaymentSuccess = (itemId) => {
           </div>
         </div>
 
-        <!-- 模式 B: 預設的產品系列 (Parent Mode) -->
+        <!-- Mode B: Parent Series -->
         <div v-else>
            <div class="flex flex-col lg:flex-row border-b border-gray-200">
              <div class="lg:w-1/2 h-64 lg:h-auto bg-gray-50 flex items-center justify-center p-4">
@@ -359,7 +347,6 @@ const onPaymentSuccess = (itemId) => {
              </div>
            </div>
            
-           <!-- 顯示該系列的所有變體 -->
            <div class="p-8 bg-gray-50">
              <h3 class="text-xl font-bold text-gray-800 mb-6 border-l-4 border-green-500 pl-3">全系列下載 ({{ selectedItem.variants.length }}色)</h3>
              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -379,7 +366,6 @@ const onPaymentSuccess = (itemId) => {
       </div>
     </div>
 
-    <!-- Payment Modal -->
     <PayModal 
       :is-open="isPayModalOpen"
       :product="payTarget"

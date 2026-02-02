@@ -9,14 +9,13 @@ const isLoading = ref(false);
 const currentTab = ref('upload'); // 'upload' | 'manage'
 
 // ==========================================
-//  共用工具：混合上傳邏輯 (Supabase + R2)
+//  共用工具
 // ==========================================
 const uploadStatus = ref('');
 
 const uploadToStorage = async (file, folder) => {
   if (!file) return null;
 
-  // 判斷：如果是壓縮檔，上傳到 Cloudflare R2 (省流量)
   if (file.name.endsWith('.zip') || file.name.endsWith('.rar')) {
     const loadingToast = toast.info(`正在傳輸至 R2: ${file.name}`, { timeout: false });
     try {
@@ -29,14 +28,10 @@ const uploadToStorage = async (file, folder) => {
     }
   } 
   
-  // 判斷：如果是圖片，上傳到 Supabase (方便公開預覽)
   const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}-${file.name}`;
   const filePath = `${folder}/${fileName}`;
   
-  const { error } = await supabase.storage
-    .from('pbr-files') 
-    .upload(filePath, file);
-
+  const { error } = await supabase.storage.from('pbr-files').upload(filePath, file);
   if (error) throw error;
   return filePath;
 };
@@ -45,10 +40,10 @@ const uploadToStorage = async (file, folder) => {
 //  PART 1: 上架新商品 (Create)
 // ==========================================
 const form = reactive({
-  name: '', brand: '', category: '超耐磨木地板', price: 0, isPremium: false, description: '', size: '', phone: '', coverFile: null
+  // 修改點：category 預設為空字串，讓使用者自己填
+  name: '', brand: '', category: '', price: 0, isPremium: false, description: '', size: '', phone: '', coverFile: null
 });
 
-// 變體列表結構
 const variants = ref([
   { id: Date.now(), code: '', imageFile: null, zipFile1k: null, zipFile2k: null, zipFile4k: null }
 ]);
@@ -76,39 +71,39 @@ const handleVariantFile = (e, index, type) => {
 };
 
 const handleSubmit = async () => {
-  if (!form.name || !form.coverFile) {
-    toast.warning('請填寫商品名稱並上傳主封面圖');
+  // 修改點：加入 category 的檢查
+  if (!form.name || !form.coverFile || !form.category) {
+    toast.warning('請填寫商品名稱、分類並上傳主封面圖');
     return;
   }
   
   for (const v of variants.value) {
-    if (!v.code) {
-      toast.warning(`請填寫變體色號`);
-      return;
-    }
-    if (!v.zipFile1k) {
-      toast.warning(`變體 ${v.code} 缺少 1K 原始檔 (必填)`);
-      return;
-    }
+    if (!v.code) return toast.warning(`請填寫變體色號`);
+    if (!v.zipFile1k) return toast.warning(`變體 ${v.code} 缺少 1K 原始檔 (必填)`);
   }
 
   try {
     isLoading.value = true;
     
-    // 1. 上傳主封面
     uploadStatus.value = '上傳主封面圖...';
     const mainCoverPath = await uploadToStorage(form.coverFile, 'covers');
     const { data: { publicUrl: mainCoverUrl } } = supabase.storage.from('pbr-files').getPublicUrl(mainCoverPath);
 
-    // 2. 寫入 Materials 表
     uploadStatus.value = '建立資料庫紀錄...';
     const { data: material, error: matError } = await supabase.from('materials').insert([{
-      name: form.name, brand: form.brand, category: form.category, price: form.price, is_premium: form.isPremium, description: form.description, size: form.size, phone: form.phone, cover_image: mainCoverUrl
+      name: form.name, 
+      brand: form.brand, 
+      category: form.category, // 寫入自訂分類
+      price: form.price, 
+      is_premium: form.isPremium, 
+      description: form.description, 
+      size: form.size, 
+      phone: form.phone, 
+      cover_image: mainCoverUrl
     }]).select().single();
 
     if (matError) throw matError;
 
-    // 3. 處理變體
     let count = 0;
     for (const v of variants.value) {
       count++;
@@ -120,7 +115,6 @@ const handleSubmit = async () => {
         variantImageUrl = supabase.storage.from('pbr-files').getPublicUrl(vPath).data.publicUrl;
       }
 
-      // 分別上傳 1K, 2K, 4K
       const path1k = await uploadToStorage(v.zipFile1k, 'zips');
       const path2k = await uploadToStorage(v.zipFile2k, 'zips');
       const path4k = await uploadToStorage(v.zipFile4k, 'zips');
@@ -155,12 +149,10 @@ const handleSubmit = async () => {
 const existingMaterials = ref([]);
 const isFetching = ref(false);
 const showEditModal = ref(false);
-// 編輯用的資料
 const editForm = reactive({});
 const editVariantsList = ref([]);
 const changingCoverId = ref(null);
 
-// 讀取列表
 const fetchMaterials = async () => {
   isFetching.value = true;
   const { data, error } = await supabase.from('materials').select('*').order('id', { ascending: false });
@@ -169,7 +161,6 @@ const fetchMaterials = async () => {
   isFetching.value = false;
 };
 
-// 列表快速換封面
 const handleUpdateCover = async (event, materialId) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -189,7 +180,6 @@ const handleUpdateCover = async (event, materialId) => {
   }
 };
 
-// 刪除主商品
 const deleteMaterial = async (id) => {
   if (!confirm('確定要刪除此商品嗎？所有的變體也會被刪除。')) return;
   try {
@@ -202,32 +192,21 @@ const deleteMaterial = async (id) => {
   }
 };
 
-// --- 開啟編輯視窗 ---
 const openEdit = async (material) => {
   Object.assign(editForm, material);
-  const { data, error } = await supabase
-    .from('material_variants')
-    .select('*')
-    .eq('material_id', material.id)
-    .order('id', { ascending: true });
-    
+  const { data, error } = await supabase.from('material_variants').select('*').eq('material_id', material.id).order('id', { ascending: true });
   if (error) return toast.error('讀取變體失敗');
-  
-  editVariantsList.value = data.map(v => ({
-    ...v,
-    newFile1k: null,
-    newFile2k: null,
-    newFile4k: null
-  }));
+  editVariantsList.value = data.map(v => ({ ...v, newFile1k: null, newFile2k: null, newFile4k: null }));
   showEditModal.value = true;
 };
 
-// --- 更新主資訊 ---
 const updateMainInfo = async () => {
   try {
+    // 修改點：加入 category 的更新
     const { error } = await supabase.from('materials').update({
         name: editForm.name,
         brand: editForm.brand,
+        category: editForm.category, // 更新分類
         price: editForm.price,
         is_premium: editForm.is_premium,
         description: editForm.description,
@@ -243,11 +222,9 @@ const updateMainInfo = async () => {
   }
 };
 
-// --- 更新單一變體 (包含檔案補傳) ---
 const updateVariant = async (variant) => {
   try {
     const loadingToast = toast.info('正在更新變體資料...', {timeout: false});
-    
     let path1k = variant.file_path_1k;
     let path2k = variant.file_path_2k;
     let path4k = variant.file_path_4k;
@@ -256,31 +233,24 @@ const updateVariant = async (variant) => {
     if (variant.newFile2k) path2k = await uploadToStorage(variant.newFile2k, 'zips');
     if (variant.newFile4k) path4k = await uploadToStorage(variant.newFile4k, 'zips');
 
-    const { error } = await supabase
-      .from('material_variants')
-      .update({
+    const { error } = await supabase.from('material_variants').update({
         code: variant.code,
         file_path_1k: path1k,
         file_path_2k: path2k,
         file_path_4k: path4k
-      })
-      .eq('id', variant.id);
+      }).eq('id', variant.id);
 
     toast.dismiss(loadingToast);
     if (error) throw error;
-    
     toast.success('變體更新成功！');
     variant.newFile1k = null; variant.newFile2k = null; variant.newFile4k = null;
-    // 更新本地顯示的路徑狀態
     variant.file_path_1k = path1k; variant.file_path_2k = path2k; variant.file_path_4k = path4k;
-
   } catch (error) {
     console.error(error);
     toast.error('變體更新失敗');
   }
 };
 
-// --- 刪除單一變體 ---
 const deleteVariant = async (id, index) => {
   if (!confirm('確定刪除此變體？')) return;
   try {
@@ -293,7 +263,6 @@ const deleteVariant = async (id, index) => {
   }
 };
 
-// --- 在編輯模式中新增變體 ---
 const newVariantCode = ref('');
 const addVariantInEdit = async () => {
   if(!newVariantCode.value) return toast.warning('請輸入色號');
@@ -301,7 +270,7 @@ const addVariantInEdit = async () => {
     const { data, error } = await supabase.from('material_variants').insert([{
         material_id: editForm.id,
         code: newVariantCode.value,
-        image: editForm.cover_image // 預設用主圖
+        image: editForm.cover_image 
       }]).select().single();
 
     if(error) throw error;
@@ -340,19 +309,20 @@ const switchTab = (tab) => {
         </div>
       </div>
 
-      <!-- TAB 1: 上架表單 (完整恢復) -->
+      <!-- TAB 1: 上架表單 -->
       <form v-if="currentTab === 'upload'" @submit.prevent="handleSubmit" class="space-y-8 animate-fadeIn">
         <div class="bg-[#1E1E1E] p-6 rounded-xl border border-gray-800 shadow-lg">
           <h2 class="text-xl font-bold mb-4 text-blue-400">1. 基本資訊</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div><label class="label">商品名稱</label><input v-model="form.name" type="text" required class="input-dark"></div>
             <div><label class="label">品牌/廠商</label><input v-model="form.brand" type="text" class="input-dark"></div>
+            
+            <!-- 修改點：這裡改為 input type="text" -->
             <div>
-              <label class="label">分類</label>
-              <select v-model="form.category" class="input-dark">
-                <option>超耐磨木地板</option><option>實木地板</option><option>石材</option><option>金屬</option><option>布料</option>
-              </select>
+              <label class="label">分類 (自行輸入)</label>
+              <input v-model="form.category" type="text" placeholder="例如：超耐磨木地板" required class="input-dark">
             </div>
+
             <div><label class="label">價格 (USD)</label><input v-model="form.price" type="number" class="input-dark"></div>
             <div><label class="label">規格</label><input v-model="form.size" type="text" class="input-dark"></div>
             <div><label class="label">電話</label><input v-model="form.phone" type="text" class="input-dark"></div>
@@ -436,6 +406,10 @@ const switchTab = (tab) => {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div><label class="label">名稱</label><input v-model="editForm.name" class="input-dark"></div>
             <div><label class="label">品牌</label><input v-model="editForm.brand" class="input-dark"></div>
+            
+            <!-- 修改點：編輯視窗也加入分類輸入框 -->
+            <div><label class="label">分類</label><input v-model="editForm.category" class="input-dark"></div>
+            
             <div><label class="label">價格</label><input v-model="editForm.price" type="number" class="input-dark"></div>
             <div><label class="label">規格</label><input v-model="editForm.size" class="input-dark"></div>
             <div><label class="label">電話</label><input v-model="editForm.phone" class="input-dark"></div>
