@@ -1,27 +1,37 @@
 <script setup>
-import { RouterView } from 'vue-router'
-import NavBar from './components/NavBar.vue'
+import { onMounted } from 'vue';
+import { RouterView, useRouter } from 'vue-router';
+import NavBar from './components/NavBar.vue';
+import { supabase } from '@/supabase'; // 引入 supabase
+
+const router = useRouter();
+
+onMounted(() => {
+  // 監聽 Supabase 的身份狀態變化
+  supabase.auth.onAuthStateChange((event, session) => {
+    
+    // 🔥 關鍵：如果偵測到是「密碼救援 (PASSWORD_RECOVERY)」事件
+    if (event === 'PASSWORD_RECOVERY') {
+      console.log('偵測到重設密碼請求，跳轉中...');
+      // 強制跳轉到重設密碼頁
+      router.push('/update-password');
+    }
+  });
+});
 </script>
 
 <template>
-  <!-- 背景色設定為深灰 (模擬 3D 軟體介面風格) -->
   <div class="min-h-screen bg-[#121212] text-gray-100 font-sans">
-    
-    <!-- 導覽列放在最上方 -->
     <NavBar />
-
-    <!-- 頁面內容顯示區 -->
     <main>
       <RouterView />
     </main>
-
   </div>
 </template>
 
 <style>
-/* 全域樣式設定 (可選) */
 body {
   margin: 0;
-  background-color: #121212; /* 確保延伸到視窗外也是黑色 */
+  background-color: #121212;
 }
 </style>

@@ -8,6 +8,7 @@ import ProfileView from '../views/ProfileView.vue'
 import LoginView from '../views/LoginView.vue'
 import AdminView from '../views/AdminView.vue'
 import ContactView from '../views/ContactView.vue'
+import UpdatePasswordView from '../views/UpdatePasswordView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,6 +33,12 @@ const router = createRouter({
       name: 'admin',
       component: AdminView,
       meta: { requiresAuth: true, requiresAdmin: true } 
+    },
+    {
+      path: '/update-password', // <--- 這個路徑要跟 auth.js 裡的 redirectTo 一致
+      name: 'update-password',
+      component: UpdatePasswordView,
+      meta: { requiresAuth: true } // 因為點連結後 Supabase 會自動登入，所以這裡設保護沒問題
     }
   ],
   scrollBehavior(to, from, savedPosition) {
@@ -54,6 +61,14 @@ router.beforeEach(async (to, from, next) => {
         console.error('路由守衛初始化失敗:', error);
       }
     }
+    
+    // ▼▼▼ 新增這段：重設密碼頁面特權通道 ▼▼▼
+    // 如果目標是 update-password，直接放行，不檢查 isLoggedIn
+    if (to.path === '/update-password') {
+      next();
+      return;
+    }
+    // ▲▲▲ 新增結束 ▲▲▲
 
     // 1. 檢查登入權限
     if (to.meta.requiresAuth && !userStore.isLoggedIn) {

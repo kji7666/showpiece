@@ -2,13 +2,13 @@
 import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
-import { login } from '@/api/auth';
-// 引入 Toast
+import { login, sendResetEmail } from '@/api/auth';
 import { useToast } from "vue-toastification";
+import Swal from 'sweetalert2';
 
 const router = useRouter();
 const userStore = useUserStore();
-const toast = useToast(); // 初始化
+const toast = useToast();
 const isLoading = ref(false);
 
 const form = reactive({
@@ -16,6 +16,7 @@ const form = reactive({
   password: ''
 });
 
+// --- 處理登入 ---
 const handleLogin = async () => {
   if (!form.email || !form.password) {
       toast.warning("請填寫 Email 與密碼");
@@ -31,20 +32,48 @@ const handleLogin = async () => {
       password: form.password
     });
 
-    // 登入成功：更新 Store
+    // 登入成功
     console.log('登入成功:', response);
     userStore.login(response.user, response.token);
-
-    // 漂亮的成功通知
     toast.success(`歡迎回來，${response.user.name}！`);
     
     router.push('/');
 
   } catch (error) {
-    // 漂亮的錯誤通知
     toast.error(error.message || "登入失敗，請檢查帳號密碼");
   } finally {
     isLoading.value = false;
+  }
+};
+
+// --- 處理忘記密碼 ---
+const handleForgotPassword = async () => {
+  const { value: email } = await Swal.fire({
+    title: '重設密碼',
+    input: 'email',
+    inputLabel: '請輸入您的註冊 Email',
+    inputPlaceholder: 'name@example.com',
+    showCancelButton: true,
+    confirmButtonText: '發送重設信',
+    cancelButtonText: '取消',
+    background: '#1E1E1E',
+    color: '#fff',
+    customClass: { input: 'text-black' }
+  });
+
+  if (email) {
+    try {
+      await sendResetEmail(email);
+      Swal.fire({
+        icon: 'success',
+        title: '已發送！',
+        text: '請檢查您的信箱，點擊信中連結來設定新密碼。',
+        background: '#1E1E1E',
+        color: '#fff'
+      });
+    } catch (error) {
+      toast.error('發送失敗：' + error.message);
+    }
   }
 };
 </script>
@@ -64,6 +93,7 @@ const handleLogin = async () => {
         
         <form class="space-y-6" @submit.prevent="handleLogin">
           
+          <!-- Email 輸入框 -->
           <div>
             <label for="email" class="block text-sm font-medium text-gray-300">電子郵件</label>
             <div class="mt-1">
@@ -71,16 +101,18 @@ const handleLogin = async () => {
             </div>
           </div>
 
+          <!-- 密碼輸入框 (這裡之前不見了，現在補回來) -->
           <div>
             <div class="flex justify-between items-center mb-1">
                <label for="password" class="block text-sm font-medium text-gray-300">密碼</label>
-               <a href="#" class="text-xs text-blue-500 hover:text-blue-400">忘記密碼?</a>
+               <a href="#" @click.prevent="handleForgotPassword" class="text-xs text-blue-500 hover:text-blue-400">忘記密碼?</a>
             </div>
             <div class="mt-1">
               <input v-model="form.password" id="password" type="password" required class="input-dark" placeholder="••••••••" />
             </div>
           </div>
 
+          <!-- 登入按鈕 -->
           <div>
             <button 
               type="submit" 

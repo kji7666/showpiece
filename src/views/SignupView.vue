@@ -1,25 +1,30 @@
 <script setup>
-import { ref, reactive } from 'vue';
-import { useRouter } from 'vue-router';
-import { register } from '@/api/auth'; // 引入剛剛寫的 API
+import { ref, reactive, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useUserStore } from '@/stores/user';
+import { register } from '@/api/auth';
+import { useToast } from "vue-toastification";
+import Swal from 'sweetalert2';
 
 const router = useRouter();
-const isLoading = ref(false);
+const route = useRoute();
 const userStore = useUserStore();
+const toast = useToast();
+const isLoading = ref(false);
 
-// 表單資料模型
+// 1. 新增：手動輸入職業的變數
+const customOccupation = ref('');
+
 const form = reactive({
   fullName: '',
   email: '',
   password: '',
   confirmPassword: '',
-  occupation: '', // 必填：職業
-  company: '',    // 選填：公司
+  occupation: '',
+  company: '',
   agreeTerms: false
 });
 
-// 職業選項 (針對 PBR 網站客群設計)
 const occupationOptions = [
   { value: 'architect', label: '建築師 / 室內設計師 (Architect / Interior Designer)' },
   { value: 'game_dev', label: '遊戲開發者 (Game Developer)' },
@@ -29,54 +34,116 @@ const occupationOptions = [
   { value: 'other', label: '其他 (Other)' }
 ];
 
-// 處理註冊邏輯
+// --- 檢查是否被踢過來的 ---
+onMounted(() => {
+  if (route.query.redirect === 'auth_required') {
+    toast.warning('該頁面需要會員權限，請先註冊或登入。');
+  }
+});
+
+// --- 處理註冊 ---
 const handleRegister = async () => {
-  // 1. 基本驗證
+  // 驗證
   if (form.password !== form.confirmPassword) {
-    alert('兩次輸入的密碼不一致！');
+    toast.warning('兩次輸入的密碼不一致！');
     return;
   }
   
   if (!form.agreeTerms) {
-    alert('請先閱讀並同意服務條款。');
+    toast.warning('請先閱讀並同意服務條款。');
     return;
   }
+
+  // 檢查：如果選了"其他"，必須填寫內容
+  if (form.occupation === 'other' && !customOccupation.value.trim()) {
+    toast.warning('請輸入您的職業名稱');
+    return;
+  }
+
+  // 決定最終要送出的職業名稱
+  const finalOccupation = form.occupation === 'other' 
+    ? customOccupation.value 
+    : form.occupation;
 
   try {
     isLoading.value = true;
     
-    // 2. 呼叫 API
+    // 呼叫 API
     const response = await register({
       fullName: form.fullName,
       email: form.email,
-      password: form.password, // 注意：真實專案中，這裡雖然傳明碼，但必須透過 HTTPS 加密傳輸
-      occupation: form.occupation,
+      password: form.password,
+      occupation: finalOccupation, // 使用處理過的值
       company: form.company
     });
 
-    // 3. 成功後處理
+    // 註冊成功直接登入
     console.log('註冊成功:', response);
     userStore.login(response.user, response.token);
-    alert('註冊成功！歡迎加入嘉樂秀圖網');
+
+    toast.success(`註冊成功！歡迎加入，${response.user.name || 'User'}。`);
     
-    // 導向回首頁 (或登入頁)
     router.push('/');
 
   } catch (error) {
     console.error(error);
-    alert(error.message || '註冊失敗，請稍後再試');
+    toast.error(error.message || '註冊失敗，請稍後再試');
   } finally {
     isLoading.value = false;
   }
+};
+
+// --- 顯示條款彈窗 ---
+const showTerms = () => {
+  Swal.fire({
+    title: '服務條款 (Terms of Service)',
+    html: `
+      <div style="text-align: left; font-size: 0.9rem; line-height: 1.6; color: #ccc; max-height: 300px; overflow-y: auto;">
+        <p>歡迎使用 PBR Master（以下簡稱本服務）。使用本服務即代表您同意以下條款：</p>
+        <br>
+        <h4>1. 服務內容</h4>
+        <p>本服務提供數位 PBR 材質檔案下載。我們保留隨時修改、暫停或終止服務的權利。</p>
+        <h4>2. 帳號安全</h4>
+        <p>您有責任維護帳號密碼的安全。任何透過您帳號進行的活動，您需負完全責任。</p>
+        <h4>3. 授權與使用</h4>
+        <p>付費會員下載之檔案可用於個人或商業專案。但<strong>嚴禁將原始檔案進行轉售、分享或建立類似的素材庫網站</strong>。</p>
+      </div>
+    `,
+    icon: 'info',
+    confirmButtonText: '我同意',
+    background: '#1E1E1E',
+    color: '#fff',
+    width: '600px'
+  });
+};
+
+const showPrivacy = () => {
+  Swal.fire({
+    title: '隱私權政策 (Privacy Policy)',
+    html: `
+      <div style="text-align: left; font-size: 0.9rem; line-height: 1.6; color: #ccc; max-height: 300px; overflow-y: auto;">
+        <p>我們非常重視您的隱私，以下是我們如何處理您的資料：</p>
+        <br>
+        <h4>1. 資料收集</h4>
+        <p>我們僅收集運作所需的必要資料：Email、密碼（加密儲存）、職業類別及購買紀錄。</p>
+        <h4>2. 資料用途</h4>
+        <p>您的資料僅用於會員驗證、訂單處理及發送重要系統通知。</p>
+      </div>
+    `,
+    icon: 'question',
+    confirmButtonText: '我了解',
+    background: '#1E1E1E',
+    color: '#fff',
+    width: '600px'
+  });
 };
 </script>
 
 <template>
   <div class="min-h-screen bg-[#121212] flex flex-col justify-center py-12 sm:px-6 lg:px-8 pt-24">
     
-    <!-- 標題區 -->
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center mb-8">
-      <h2 class="text-3xl font-extrabold text-white">加入嘉樂秀圖網</h2>
+      <h2 class="text-3xl font-extrabold text-white">加入 PBR Master</h2>
       <p class="mt-2 text-sm text-gray-400">
         建立帳戶以解鎖 
         <span class="text-blue-500 font-medium">8K 高畫質下載</span> 與 
@@ -84,7 +151,6 @@ const handleRegister = async () => {
       </p>
     </div>
 
-    <!-- 表單卡片 -->
     <div class="sm:mx-auto sm:w-full sm:max-w-md">
       <div class="bg-[#1E1E1E] py-8 px-4 shadow-2xl shadow-black/50 sm:rounded-xl sm:px-10 border border-gray-800">
         
@@ -119,6 +185,21 @@ const handleRegister = async () => {
                 </option>
               </select>
             </div>
+
+            <!-- 自訂職業輸入框 (當選擇 Other 時出現) -->
+            <div v-if="form.occupation === 'other'" class="mt-3 animate-fadeIn">
+              <label for="custom-occupation" class="block text-xs text-blue-400 mb-1">
+                請輸入您的職業名稱：
+              </label>
+              <input 
+                v-model="customOccupation" 
+                id="custom-occupation" 
+                type="text" 
+                class="input-dark bg-gray-800 border-blue-500/50" 
+                placeholder="例如: 3D模型師、策展人..." 
+                required
+              />
+            </div>
           </div>
 
           <!-- 公司 (選填) -->
@@ -152,7 +233,10 @@ const handleRegister = async () => {
           <div class="flex items-center">
             <input v-model="form.agreeTerms" id="terms" type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-600 rounded bg-gray-700">
             <label for="terms" class="ml-2 block text-sm text-gray-300">
-              我同意 <a href="#" class="text-blue-500 hover:text-blue-400">服務條款</a> 與 <a href="#" class="text-blue-500 hover:text-blue-400">隱私權政策</a>
+              我同意 
+              <a href="#" @click.prevent="showTerms" class="text-blue-500 hover:text-blue-400 font-medium">服務條款</a> 
+              與 
+              <a href="#" @click.prevent="showPrivacy" class="text-blue-500 hover:text-blue-400 font-medium">隱私權政策</a>
             </label>
           </div>
 
@@ -161,7 +245,7 @@ const handleRegister = async () => {
             <button 
               type="submit" 
               :disabled="isLoading"
-              class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               <svg v-if="isLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -172,14 +256,14 @@ const handleRegister = async () => {
           </div>
         </form>
 
-        <!-- 底部連結 -->
-        <p class="text-sm text-gray-400">
-        已經有帳號了嗎？
-        <!-- 將原本的 href="#" 改成 RouterLink -->
-        <RouterLink to="/login" class="font-medium text-blue-500 hover:text-blue-400">
-            直接登入
-        </RouterLink>
-        </p>
+        <div class="mt-6 text-center">
+          <p class="text-sm text-gray-400">
+            已經有帳號了嗎？
+            <RouterLink to="/login" class="font-medium text-blue-500 hover:text-blue-400">
+              直接登入
+            </RouterLink>
+          </p>
+        </div>
 
       </div>
     </div>
@@ -187,12 +271,17 @@ const handleRegister = async () => {
 </template>
 
 <style scoped>
-/* 
-  自定義 Input 樣式類別 
-  使用 @apply 可以讓 HTML 更乾淨 (需搭配 PostCSS)，
-  但為了方便你直接複製貼上，這裡直接寫 CSS Class。
-*/
 .input-dark {
   @apply block w-full px-4 py-3 bg-[#2A2A2A] border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all;
+}
+
+/* 輸入框淡入動畫 */
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

@@ -70,15 +70,38 @@ const selectedCategory = ref('All');
 const priceFilter = ref('All'); 
 const categories = ['All', '超耐磨木地板', '實木地板', '石材', '金屬', '布料'];
 
+
 const filteredMaterials = computed(() => {
   return materials.value.filter(item => {
-    const term = searchQuery.value.toLowerCase();
-    const matchKeyword = (item.name || '').toLowerCase().includes(term) || (item.description || '').toLowerCase().includes(term);
+    const term = searchQuery.value.toLowerCase().trim(); // 去除前後空白並轉小寫
+
+    // --- 1. 關鍵字搜尋 (大幅升級) ---
+    
+    // A. 搜尋基本欄位：品名 (Name)、廠商 (Brand)、描述 (Description)
+    const matchBasicInfo = 
+      (item.name || '').toLowerCase().includes(term) || 
+      (item.brand || '').toLowerCase().includes(term) || 
+      (item.description || '').toLowerCase().includes(term);
+
+    // B. 搜尋產品型號 (Code)：因為型號藏在 variants 陣列裡，要深入去檢查
+    // 只要該材質的「任何一個」變體代號符合搜尋關鍵字，就算符合
+    const matchModelCode = item.variants && item.variants.some(v => 
+      (v.code || '').toLowerCase().includes(term)
+    );
+
+    // 只要 A 或 B 其中一個符合，關鍵字搜尋就算通過
+    const isKeywordMatch = matchBasicInfo || matchModelCode;
+
+
+    // --- 2. 其他篩選條件 (保持不變) ---
     const matchCategory = selectedCategory.value === 'All' || item.category === selectedCategory.value;
+    
     let matchPrice = true;
     if (priceFilter.value === 'Free') matchPrice = !item.isPremium;
     if (priceFilter.value === 'Premium') matchPrice = item.isPremium;
-    return matchKeyword && matchCategory && matchPrice;
+
+    // --- 3. 回傳總結果 ---
+    return isKeywordMatch && matchCategory && matchPrice;
   });
 });
 
@@ -197,11 +220,11 @@ const onPaymentSuccess = (itemId) => {
           <p class="text-gray-400">精選高品質建築與室內設計材質</p>
         </div>
         <div class="relative w-full md:w-auto">
-          <input v-model="searchQuery" type="text" placeholder="搜尋材質名稱..." class="bg-gray-800 border border-gray-700 text-white px-4 py-2 pl-10 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-80 transition-all">
+          <input v-model="searchQuery" type="text" placeholder="搜尋品名、廠商或產品型號..." class="bg-gray-800 border border-gray-700 text-white px-4 py-2 pl-10 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-80 transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-3 top-2.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-4 p-4 bg-[#1E1E1E] rounded-xl border border-gray-800 shadow-md">
+      <!-- <div class="flex flex-wrap items-center gap-4 p-4 bg-[#1E1E1E] rounded-xl border border-gray-800 shadow-md">
         <div class="flex flex-wrap gap-2 items-center">
           <span class="text-sm text-gray-500 mr-1">分類:</span>
           <button v-for="cat in categories" :key="cat" @click="selectedCategory = cat" class="px-3 py-1 text-sm rounded-full border transition-all" :class="selectedCategory === cat ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-300 border-gray-600 hover:border-gray-400 hover:bg-gray-800'">{{ cat }}</button>
@@ -215,7 +238,7 @@ const onPaymentSuccess = (itemId) => {
             <option value="Premium">付費 (Premium)</option>
           </select>
         </div>
-      </div>
+      </div> -->
     </div>
 
     <div v-if="isLoading" class="flex flex-col items-center justify-center py-20">
@@ -235,7 +258,7 @@ const onPaymentSuccess = (itemId) => {
           <div class="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
           <div class="absolute top-3 right-3">
              <span v-if="item.isPremium" class="bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded shadow-md">PREMIUM ${{ item.price }}</span>
-             <span v-else class="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded shadow-md">FREE</span>
+             <!-- <span v-else class="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded shadow-md">FREE</span> -->
           </div>
         </div>
         <div class="p-6">
@@ -245,7 +268,7 @@ const onPaymentSuccess = (itemId) => {
           </div>
           <div class="space-y-1 mb-6 text-gray-600">
             <p><span class="font-semibold text-gray-800">材質：</span> {{ item.category }}</p>
-            <p><span class="font-semibold text-gray-800">用途：</span> {{ item.usage }}</p>
+            <p><span class="font-semibold text-gray-800"></span> {{ item.usage }}</p>
           </div>
           <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
             查看詳情 / Download
@@ -276,7 +299,7 @@ const onPaymentSuccess = (itemId) => {
                  <div class="flex items-center gap-2">
                     <span v-if="selectedMaterial.isPremium && selectedMaterial.price === 0" class="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-bold rounded-full">限時免費</span>
                     <span v-else-if="selectedMaterial.isPremium" class="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-bold rounded-full">${{ selectedMaterial.price }} USD</span>
-                    <span v-else class="px-3 py-1 bg-green-100 text-green-800 text-sm font-bold rounded-full">FREE</span>
+                    <!-- <span v-else class="px-3 py-1 bg-green-100 text-green-800 text-sm font-bold rounded-full">FREE</span> -->
                     <span v-if="userStore.hasPurchased(selectedMaterial.id)" class="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-bold rounded-full border border-blue-200 flex items-center gap-1">已購買</span>
                  </div>
               </div>

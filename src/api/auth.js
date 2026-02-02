@@ -72,3 +72,24 @@ export const logout = async () => {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 };
+
+// 4. 發送重設密碼信件
+export const sendResetEmail = async (email) => {
+  // window.location.origin 會自動抓目前的網址 (例如 https://showpiece.com.tw)
+  const redirectTo = `${window.location.origin}/update-password`;
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectTo,
+  });
+
+  if (error) throw error;
+};
+
+// 5. 更新用戶密碼 (登入狀態下使用)
+export const updateUserPassword = async (newPassword) => {
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword
+  });
+
+  if (error) throw error;
+};
