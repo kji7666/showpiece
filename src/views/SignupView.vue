@@ -146,7 +146,7 @@ const showPrivacy = () => {
       <h2 class="text-3xl font-extrabold text-white">加入 PBR Master</h2>
       <p class="mt-2 text-sm text-gray-400">
         建立帳戶以解鎖 
-        <span class="text-blue-500 font-medium">8K 高畫質下載</span> 與 
+        <span class="text-blue-500 font-medium">4K 高畫質下載</span> 與 
         <span class="text-blue-500 font-medium">商用授權</span>
       </p>
     </div>
