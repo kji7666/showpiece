@@ -99,7 +99,7 @@ const showTerms = () => {
     title: '服務條款 (Terms of Service)',
     html: `
       <div style="text-align: left; font-size: 0.9rem; line-height: 1.6; color: #ccc; max-height: 300px; overflow-y: auto;">
-        <p>歡迎使用 PBR Master（以下簡稱本服務）。使用本服務即代表您同意以下條款：</p>
+        <p>歡迎使用 嘉樂秀圖網（以下簡稱本服務）。使用本服務即代表您同意以下條款：</p>
         <br>
         <h4>1. 服務內容</h4>
         <p>本服務提供數位 PBR 材質檔案下載。我們保留隨時修改、暫停或終止服務的權利。</p>
@@ -143,7 +143,7 @@ const showPrivacy = () => {
   <div class="min-h-screen bg-[#121212] flex flex-col justify-center py-12 sm:px-6 lg:px-8 pt-24">
     
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center mb-8">
-      <h2 class="text-3xl font-extrabold text-white">加入 PBR Master</h2>
+      <h2 class="text-3xl font-extrabold text-white">加入 嘉樂秀圖網</h2>
       <p class="mt-2 text-sm text-gray-400">
         建立帳戶以解鎖 
         <span class="text-blue-500 font-medium">4K 高畫質下載</span> 與 
