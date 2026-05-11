@@ -7,7 +7,7 @@ import { uploadToR2 } from '@/utils/r2';
 const toast = useToast();
 
 const isLoading = ref(false);
-const currentTab = ref('upload'); // 'upload' | 'manage'
+const currentTab = ref('upload');
 const uploadStatus = ref('');
 
 // ==========================================
@@ -264,7 +264,22 @@ const editForm = reactive({});
 const editCoverPreview = ref('');
 const editVariantsList = ref([]);
 const changingCoverId = ref(null);
-const newVariantCode = ref('');
+
+const newEditVariant = reactive({
+  code: '',
+  imageFile: null,
+  file1k: null,
+  file2k: null,
+  file4k: null,
+});
+
+const resetNewEditVariant = () => {
+  newEditVariant.code = '';
+  newEditVariant.imageFile = null;
+  newEditVariant.file1k = null;
+  newEditVariant.file2k = null;
+  newEditVariant.file4k = null;
+};
 
 const fetchMaterials = async () => {
   try {
@@ -344,6 +359,7 @@ const openEdit = async (material) => {
     });
 
     editCoverPreview.value = material.cover_image || '';
+    resetNewEditVariant();
 
     const { data, error } = await supabase
       .from('material_variants')
@@ -371,7 +387,7 @@ const openEdit = async (material) => {
 
 const closeEditModal = () => {
   showEditModal.value = false;
-  newVariantCode.value = '';
+  resetNewEditVariant();
   editVariantsList.value = [];
   editCoverPreview.value = '';
 };
@@ -521,27 +537,65 @@ const deleteVariant = async (id, index) => {
   }
 };
 
+const handleNewEditVariantFile = (event, type) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (type === 'image') newEditVariant.imageFile = file;
+  if (type === '1k') newEditVariant.file1k = file;
+  if (type === '2k') newEditVariant.file2k = file;
+  if (type === '4k') newEditVariant.file4k = file;
+};
+
 const addVariantInEdit = async () => {
-  if (!newVariantCode.value.trim()) {
+  if (!newEditVariant.code.trim()) {
     toast.warning('請輸入色號');
     return;
   }
 
+  if (!newEditVariant.file1k) {
+    toast.warning('請至少上傳 1K 檔案');
+    return;
+  }
+
   try {
+    const loadingToast = toast.info('正在新增變體...', {
+      timeout: false,
+    });
+
+    let imageUrl = editForm.cover_image;
+
+    if (newEditVariant.imageFile) {
+      const imagePath = await uploadToStorage(newEditVariant.imageFile, 'covers');
+
+      imageUrl = supabase
+        .storage
+        .from('pbr-files')
+        .getPublicUrl(imagePath)
+        .data
+        .publicUrl;
+    }
+
+    const path1k = await uploadToStorage(newEditVariant.file1k, 'zips');
+    const path2k = await uploadToStorage(newEditVariant.file2k, 'zips');
+    const path4k = await uploadToStorage(newEditVariant.file4k, 'zips');
+
     const { data, error } = await supabase
       .from('material_variants')
       .insert([
         {
           material_id: editForm.id,
-          code: newVariantCode.value.trim(),
-          image: editForm.cover_image,
-          file_path_1k: null,
-          file_path_2k: null,
-          file_path_4k: null,
+          code: newEditVariant.code.trim(),
+          image: imageUrl,
+          file_path_1k: path1k,
+          file_path_2k: path2k,
+          file_path_4k: path4k,
         },
       ])
       .select()
       .single();
+
+    toast.dismiss(loadingToast);
 
     if (error) throw error;
 
@@ -554,11 +608,12 @@ const addVariantInEdit = async () => {
       newFile4k: null,
     });
 
-    newVariantCode.value = '';
-    toast.success('新變體已建立，請上傳預覽圖與檔案');
+    resetNewEditVariant();
+
+    toast.success('新變體已新增');
   } catch (error) {
     console.error(error);
-    toast.error('新增失敗：' + error.message);
+    toast.error('新增變體失敗：' + error.message);
   }
 };
 
@@ -982,7 +1037,7 @@ const switchTab = (tab) => {
           </div>
         </div>
 
-        <!-- B. 編輯變體 -->
+        <!-- B. 編輯既有變體 -->
         <div>
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-bold text-green-400">
@@ -1142,30 +1197,95 @@ const switchTab = (tab) => {
             </button>
           </div>
 
-          <!-- 新增變體 -->
-          <div class="mt-6 bg-gray-900/60 border border-gray-700 rounded-xl p-5">
-            <h4 class="font-bold text-gray-200 mb-3">
-              新增變體
-            </h4>
-
-            <div class="flex flex-col md:flex-row gap-3">
-              <input
-                v-model="newVariantCode"
-                placeholder="新變體色號，例如：RO-New"
-                class="input-dark flex-1"
-              >
-
-              <button
-                @click="addVariantInEdit"
-                class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded text-sm font-bold"
-              >
-                + 新增變體
-              </button>
+          <!-- C. 新增變體：完整格式 -->
+          <div class="mt-8 bg-gray-900/60 border border-gray-700 rounded-xl p-6">
+            <div class="flex justify-between items-center mb-6">
+              <h4 class="text-lg font-bold text-green-400">
+                新增變體
+              </h4>
             </div>
 
-            <p class="text-xs text-gray-500 mt-2">
-              新增後會先建立空變體，再從上方列表補上預覽圖與 1K / 2K / 4K 檔案。
-            </p>
+            <div class="p-6 bg-gray-950/50 rounded-lg border border-gray-700 relative">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                <div>
+                  <label class="label text-xs">色號</label>
+                  <input
+                    v-model="newEditVariant.code"
+                    type="text"
+                    placeholder="例如：TK-ED-001"
+                    class="input-dark text-sm"
+                  >
+                </div>
+
+                <div>
+                  <label class="label text-xs">預覽圖</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    @change="(e) => handleNewEditVariantFile(e, 'image')"
+                    class="file-input text-xs"
+                  >
+
+                  <p v-if="newEditVariant.imageFile" class="text-xs text-green-400 mt-1 truncate">
+                    {{ newEditVariant.imageFile.name }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-black/20 p-4 rounded-lg border border-gray-800">
+                <div>
+                  <label class="label text-xs text-blue-300">1K 檔案 ZIP / RAR</label>
+                  <input
+                    type="file"
+                    accept=".zip,.rar,.7z,.tar.gz,.tgz"
+                    @change="(e) => handleNewEditVariantFile(e, '1k')"
+                    class="file-input text-xs"
+                  >
+
+                  <p v-if="newEditVariant.file1k" class="text-xs text-green-400 mt-1 truncate">
+                    {{ newEditVariant.file1k.name }}
+                  </p>
+                </div>
+
+                <div>
+                  <label class="label text-xs text-purple-300">2K 檔案 ZIP / RAR</label>
+                  <input
+                    type="file"
+                    accept=".zip,.rar,.7z,.tar.gz,.tgz"
+                    @change="(e) => handleNewEditVariantFile(e, '2k')"
+                    class="file-input text-xs"
+                  >
+
+                  <p v-if="newEditVariant.file2k" class="text-xs text-green-400 mt-1 truncate">
+                    {{ newEditVariant.file2k.name }}
+                  </p>
+                </div>
+
+                <div>
+                  <label class="label text-xs text-orange-300">4K 檔案 ZIP / RAR</label>
+                  <input
+                    type="file"
+                    accept=".zip,.rar,.7z,.tar.gz,.tgz"
+                    @change="(e) => handleNewEditVariantFile(e, '4k')"
+                    class="file-input text-xs"
+                  >
+
+                  <p v-if="newEditVariant.file4k" class="text-xs text-green-400 mt-1 truncate">
+                    {{ newEditVariant.file4k.name }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex justify-end mt-5">
+                <button
+                  type="button"
+                  @click="addVariantInEdit"
+                  class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg text-sm font-bold"
+                >
+                  + 新增變體
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
