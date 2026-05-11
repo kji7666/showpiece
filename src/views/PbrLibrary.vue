@@ -16,7 +16,6 @@ const rawMaterials = ref([]); // 原始資料 (以產品 Parent 為主)
 const isLoading = ref(true);     
 const errorMsg = ref('');        
 
-// --- 1. 資料讀取 (維持階層結構) ---
 const fetchMaterials = async () => {
   try {
     isLoading.value = true;
@@ -25,13 +24,15 @@ const fetchMaterials = async () => {
     const { data, error } = await supabase
       .from('materials')
       .select(`*, material_variants (*)`)
-      .order('id', { ascending: true });
+      .order('name', { ascending: true })
+      .order('code', { 
+        foreignTable: 'material_variants', 
+        ascending: true 
+      });
 
     if (error) throw error;
 
-    // 整理原始資料，保留階層結構
     rawMaterials.value = data.map(item => ({
-      // 標記這是 Parent 類型
       type: 'parent', 
       id: item.id,
       brand: item.brand,
@@ -41,18 +42,17 @@ const fetchMaterials = async () => {
       size: item.size,
       phone: item.phone,
       description: item.description,
-      // 圖片與價格
       image: item.cover_image, 
       price: Number(item.price),    
       isPremium: item.is_premium,
-      // 變體陣列
+
       variants: item.material_variants ? item.material_variants.map(v => ({
-        type: 'variant', // 標記這是 Variant 類型
+        type: 'variant',
         id: v.id,
         parentId: item.id, 
         parentName: item.name, 
         brand: item.brand,     
-        parentCategory: item.category, // [新增] 將父層分類傳給變體，方便搜尋顯示或其他用途
+        parentCategory: item.category,
         code: v.code,
         image: v.image || item.cover_image,
         description: item.description, 
@@ -198,7 +198,8 @@ const startDownload = async (parentName, variantCode, resolution, filePath) => {
 
     const link = document.createElement('a');
     link.href = signedUrl;
-    link.setAttribute('download', `${parentName}-${variantCode}-${resolution}.zip`);
+    const ext = getFileExtension(filePath);
+    link.setAttribute('download', `${parentName}-${variantCode}-${resolution}.${ext}`);
     document.body.appendChild(link);
     link.click();
     link.parentNode.removeChild(link);
@@ -213,6 +214,20 @@ const onPaymentSuccess = (itemId) => {
   isPayModalOpen.value = false;
   Swal.fire({ title: '付款成功！', icon: 'success', background: '#fff', color: '#333', confirmButtonColor: '#005eb8' });
 };
+
+const getFileExtension = (filePath) => {
+  if (!filePath) return 'zip';
+
+  const lower = filePath.toLowerCase();
+
+  if (lower.endsWith('.tar.gz')) return 'tar.gz';
+  if (lower.endsWith('.tgz')) return 'tgz';
+  if (lower.endsWith('.rar')) return 'rar';
+  if (lower.endsWith('.zip')) return 'zip';
+
+  return 'zip';
+};
+
 </script>
 
 <template>
