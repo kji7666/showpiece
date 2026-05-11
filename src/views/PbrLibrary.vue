@@ -185,47 +185,78 @@ const handleDownload = (item, variantCode, resolution) => {
 
 const startDownload = async (parentName, variantCode, resolution, filePath) => {
   try {
+    console.log("[download] start:", {
+      parentName,
+      variantCode,
+      resolution,
+      filePath,
+    });
+
     if (!filePath) {
       toast.warning(`抱歉，目前尚未上架 [${resolution}] 解析度的檔案。`);
       return;
     }
+
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { /* ... */ return; }
 
-    toast.info('正在請求 R2 雲端下載...', { timeout: 1500 });
+    if (!session) {
+      toast.error("登入狀態已過期，請重新登入。");
+      router.push({ path: "/signup", query: { redirect: "session_expired" } });
+      return;
+    }
+
+    toast.info("正在請求 R2 雲端下載...", { timeout: 1500 });
+
     const signedUrl = await getR2DownloadLink(filePath);
-    toast.success(`下載開始：${parentName}-${variantCode} (${resolution})`);
 
-    const link = document.createElement('a');
-    link.href = signedUrl;
     const ext = getFileExtension(filePath);
-    link.setAttribute('download', `${parentName}-${variantCode}-${resolution}.${ext}`);
+    const safeParentName = sanitizeDownloadName(parentName);
+    const safeVariantCode = sanitizeDownloadName(variantCode);
+    const safeResolution = sanitizeDownloadName(resolution);
+
+    const downloadFileName = `${safeParentName}-${safeVariantCode}-${safeResolution}.${ext}`;
+
+    console.log("[download] final filename:", downloadFileName);
+    console.log("[download] signed url:", signedUrl);
+
+    toast.success(`下載開始：${downloadFileName}`);
+
+    const link = document.createElement("a");
+    link.href = signedUrl;
+    link.setAttribute("download", downloadFileName);
+    link.style.display = "none";
+
     document.body.appendChild(link);
     link.click();
-    link.parentNode.removeChild(link);
+    document.body.removeChild(link);
   } catch (err) {
-    console.error('下載失敗:', err);
-    toast.error('下載失敗：R2 連線錯誤或檔案不存在。');
+    console.error("[download] failed:", err);
+    toast.error("下載失敗：R2 連線錯誤或檔案不存在。");
   }
+};
+
+const getFileExtension = (filePath) => {
+  const lower = String(filePath || "").toLowerCase();
+
+  if (lower.endsWith(".tar.gz")) return "tar.gz";
+  if (lower.endsWith(".tgz")) return "tgz";
+  if (lower.endsWith(".rar")) return "rar";
+  if (lower.endsWith(".zip")) return "zip";
+  if (lower.endsWith(".7z")) return "7z";
+
+  return "zip";
+};
+
+const sanitizeDownloadName = (name) => {
+  return String(name || "material")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, "_");
 };
 
 const onPaymentSuccess = (itemId) => {
   userStore.addPurchase(itemId);
   isPayModalOpen.value = false;
   Swal.fire({ title: '付款成功！', icon: 'success', background: '#fff', color: '#333', confirmButtonColor: '#005eb8' });
-};
-
-const getFileExtension = (filePath) => {
-  if (!filePath) return 'zip';
-
-  const lower = filePath.toLowerCase();
-
-  if (lower.endsWith('.tar.gz')) return 'tar.gz';
-  if (lower.endsWith('.tgz')) return 'tgz';
-  if (lower.endsWith('.rar')) return 'rar';
-  if (lower.endsWith('.zip')) return 'zip';
-
-  return 'zip';
 };
 
 </script>

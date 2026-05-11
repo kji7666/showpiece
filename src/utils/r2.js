@@ -1,55 +1,92 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { supabase } from "@/supabase";
 
-const R2 = new S3Client({
-  region: "auto",
-  endpoint: import.meta.env.VITE_R2_ENDPOINT,
-  credentials: {
-    accessKeyId: import.meta.env.VITE_R2_ACCESS_KEY,
-    secretAccessKey: import.meta.env.VITE_R2_SECRET_KEY,
-  },
-});
+const getContentType = (file) => {
+  const lower = file.name.toLowerCase();
 
-const BUCKET_NAME = import.meta.env.VITE_R2_BUCKET;
+  if (lower.endsWith(".rar")) return "application/vnd.rar";
+  if (lower.endsWith(".zip")) return "application/zip";
+  if (lower.endsWith(".7z")) return "application/x-7z-compressed";
+  if (lower.endsWith(".tar.gz")) return "application/gzip";
+  if (lower.endsWith(".tgz")) return "application/gzip";
 
-export const uploadToR2 = async (file, folder = 'zips') => {
-  const fileName = `${folder}/${Date.now()}-${file.name}`;
-  
-  // ▼▼▼ 修改開始：先將檔案轉換為 ArrayBuffer ▼▼▼
-  const arrayBuffer = await file.arrayBuffer();
-  const fileBody = new Uint8Array(arrayBuffer);
-  // ▲▲▲ 修改結束 ▲▲▲
-
-  const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: fileName,
-    Body: fileBody, // <--- 這裡改成傳入轉換後的 fileBody，而不是原本的 file
-    ContentType: file.type,
-    // 加入這個可以確保瀏覽器下載時知道檔案大小
-    ContentLength: file.size 
-  });
-
-  try {
-    await R2.send(command);
-    console.log('R2 上傳成功:', fileName);
-    return fileName;
-  } catch (error) {
-    console.error('R2 上傳失敗:', error);
-    throw error;
-  }
+  return file.type || "application/octet-stream";
 };
 
-export const getR2DownloadLink = async (fileName) => {
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: fileName,
+const sanitizeFileName = (name) => {
+  return String(name || "file")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, "_");
+};
+
+export const uploadToR2 = async (file, folder = "zips") => {
+  if (!file) {
+    throw new Error("沒有選擇檔案");
+  }
+
+  const safeName = sanitizeFileName(file.name);
+  const key = `${folder}/${Date.now()}-${safeName}`;
+  const contentType = getContentType(file);
+
+  console.log("[R2 upload request]", {
+    key,
+    contentType,
+    size: file.size,
   });
 
-  try {
-    const url = await getSignedUrl(R2, command, { expiresIn: 3600 });
-    return url;
-  } catch (error) {
-    console.error('R2 簽署失敗:', error);
-    throw error;
+  const { data, error } = await supabase.functions.invoke("r2-sign-upload", {
+    body: {
+      key,
+      contentType,
+    },
+  });
+
+  if (error) {
+    console.error("[R2 upload sign error]", error);
+    throw new Error(error.message || "取得 R2 上傳連結失敗");
   }
+
+  if (!data?.url) {
+    throw new Error("Edge Function 沒有回傳上傳 URL");
+  }
+
+  const uploadRes = await fetch(data.url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": contentType,
+    },
+    body: file,
+  });
+
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text().catch(() => "");
+    console.error("[R2 upload failed]", uploadRes.status, text);
+    throw new Error(`R2 上傳失敗：${uploadRes.status}`);
+  }
+
+  console.log("[R2 upload success]", key);
+
+  return key;
+};
+
+export const getR2DownloadLink = async (key) => {
+  if (!key) {
+    throw new Error("缺少 R2 檔案路徑");
+  }
+
+  console.log("[R2 download request]", key);
+
+  const { data, error } = await supabase.functions.invoke("r2-sign-download", {
+    body: { key },
+  });
+
+  if (error) {
+    console.error("[R2 download sign error]", error);
+    throw new Error(error.message || "取得 R2 下載連結失敗");
+  }
+
+  if (!data?.url) {
+    throw new Error("Edge Function 沒有回傳下載 URL");
+  }
+
+  return data.url;
 };

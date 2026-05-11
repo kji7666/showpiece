@@ -16,23 +16,60 @@ const uploadStatus = ref('');
 const uploadToStorage = async (file, folder) => {
   if (!file) return null;
 
-  if (file.name.endsWith('.zip') || file.name.endsWith('.rar')) {
-    const loadingToast = toast.info(`正在傳輸至 R2: ${file.name}`, { timeout: false });
+  const lowerName = file.name.toLowerCase();
+
+  console.log("[uploadToStorage] selected file:", {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    folder,
+  });
+
+  const isCompressedFile =
+    lowerName.endsWith(".zip") ||
+    lowerName.endsWith(".rar") ||
+    lowerName.endsWith(".7z") ||
+    lowerName.endsWith(".tar.gz") ||
+    lowerName.endsWith(".tgz");
+
+  if (isCompressedFile) {
+    const loadingToast = toast.info(`正在傳輸至 R2: ${file.name}`, {
+      timeout: false,
+    });
+
     try {
-      const path = await uploadToR2(file, 'zips');
+      const path = await uploadToR2(file, "zips");
+
+      console.log("[uploadToStorage] R2 returned path:", path);
+
+      if (lowerName.endsWith(".rar") && !String(path).toLowerCase().endsWith(".rar")) {
+        console.warn("[uploadToStorage] 警告：上傳的是 RAR，但 R2 回傳路徑不是 .rar:", path);
+        toast.warning(`警告：上傳的是 RAR，但儲存路徑不是 .rar：${path}`);
+      }
+
       toast.dismiss(loadingToast);
       return path;
     } catch (e) {
       toast.dismiss(loadingToast);
+      console.error("[uploadToStorage] R2 upload failed:", e);
       throw e;
     }
-  } 
-  
-  const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}-${file.name}`;
+  }
+
+  const fileName = `${Date.now()}-${Math.random()
+    .toString(36)
+    .substring(7)}-${file.name}`;
+
   const filePath = `${folder}/${fileName}`;
-  
-  const { error } = await supabase.storage.from('pbr-files').upload(filePath, file);
+
+  const { error } = await supabase.storage
+    .from("pbr-files")
+    .upload(filePath, file);
+
   if (error) throw error;
+
+  console.log("[uploadToStorage] Supabase storage path:", filePath);
+
   return filePath;
 };
 
