@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import { createReadStream, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -196,10 +197,27 @@ async function main() {
   let browser;
 
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    const isVercel = Boolean(process.env.VERCEL);
+
+    const browser = await puppeteer.launch(
+      isVercel
+        ? {
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
+          }
+        : {
+            executablePath:
+              process.env.CHROME_PATH ||
+              'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            headless: true,
+            args: [
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
+            ],
+          }
+    );
 
     // 先從真實 /pbr DOM 找出目前 Supabase 中所有商品 URL。
     const productRoutes = await discoverProductRoutes(browser);
