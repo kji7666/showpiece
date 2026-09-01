@@ -6,25 +6,65 @@ import { supabase } from '@/supabase';
 
 const router = useRouter();
 
+// --- Phase 2：build 後預渲染完成訊號 ---
+// prerender 腳本會等待這個屬性，確保 SEO metadata 與首頁動態內容都已渲染。
+const markPrerenderReady = () => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-prerender-ready', 'true');
+  }
+};
+
+// --- SEO：Phase 1 ---
+const setSeo = ({ title, description, canonical }) => {
+  document.title = title;
+
+  const upsertMeta = (selector, attrs) => {
+    let el = document.head.querySelector(selector);
+    if (!el) {
+      el = document.createElement('meta');
+      document.head.appendChild(el);
+    }
+    Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value));
+  };
+
+  const upsertCanonical = (href) => {
+    let el = document.head.querySelector('link[rel="canonical"]');
+    if (!el) {
+      el = document.createElement('link');
+      el.setAttribute('rel', 'canonical');
+      document.head.appendChild(el);
+    }
+    el.setAttribute('href', href);
+  };
+
+  upsertMeta('meta[name="description"]', { name: 'description', content: description });
+  upsertMeta('meta[property="og:title"]', { property: 'og:title', content: title });
+  upsertMeta('meta[property="og:description"]', { property: 'og:description', content: description });
+  upsertMeta('meta[property="og:type"]', { property: 'og:type', content: 'website' });
+  upsertMeta('meta[property="og:url"]', { property: 'og:url', content: canonical });
+  upsertMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: 'summary_large_image' });
+  upsertCanonical(canonical);
+};
+
 // --- 1. 輪播圖資料 ---
 const heroSlides = [
   {
     id: 1,
-    image: 'display1.jpg', 
-    title: '提供高品質物理渲染材質',
-    subtitle: 'Provides high-quality physically rendered materials'
+    image: 'display1.jpg',
+    title: '真實建材轉換為 PBR 材質貼圖',
+    subtitle: '讓建材產品更容易應用於 3D 建築與室內設計視覺化'
   },
   {
     id: 2,
-    image: 'display2.jpg', 
-    title: '專業精緻印刷加工',
-    subtitle: 'Professional exquisite printing processing'
+    image: 'display2.jpg',
+    title: '支援主流 3D 渲染軟體',
+    subtitle: '適用於 Blender、D5 Render、Enscape、Lumion、Twinmotion 等工作流程'
   },
   {
     id: 3,
-    image: 'display3.jpg', 
-    title: '印前設計/後加工一條龍服務',
-    subtitle: 'Pre-press design/post-processing one-stop service'
+    image: 'display3.jpg',
+    title: '保留產品品牌、尺寸與材質來源',
+    subtitle: '讓設計師下載的不只是貼圖，也能知道實際建材的規格與來源'
   }
 ];
 
@@ -46,15 +86,14 @@ const setSlide = (index) => {
 // --- 2. 特色介紹資料 ---
 const features = [
   {
-    title: 'PBR材質貼圖',
-    desc: "透過這個平台，室內外設計師可以下載產品PBR材質貼圖，用於 3D 視覺渲染。這樣一來，建材商與設計師之間的使用體驗更加緊密，不會因為從網路下載而不知道建材尺寸和來源。",
+    title: '建材 PBR 材質貼圖',
+    desc: '將木地板、磁磚、石材等實際建材產品轉換為可供 3D 視覺渲染使用的 PBR 材質貼圖，方便設計師直接套用於建築與室內設計專案。',
     icon: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'
   },
   {
-    title: '官方網站',
-    desc: '目前，由於我們剛起步，材料數量有限，但我們會努力補充更多內容。如果使用者在使用過程中有任何需要改善的地方，歡迎到如藝官網，透過電子郵件聯絡我們，我們將竭誠為您服務。',
-    icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
-    link: 'https://joyprint.com.tw/' 
+    title: '保留產品規格與來源',
+    desc: '材質不只提供貼圖，也保留品牌、品名、分類、尺寸與系列色號等資訊，降低從一般網路素材下載後無法確認真實建材來源與規格的問題。',
+    icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'
   }
 ];
 
@@ -91,8 +130,18 @@ const fetchTrending = async () => {
   }
 };
 
-const goToDetail = () => {
-  router.push('/pbr');
+const slugify = (value) => {
+  const normalized = String(value || 'material')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || 'material';
+};
+
+const goToDetail = (item) => {
+  router.push(`/pbr/product/${item.id}/${slugify(item.name)}`);
 };
 
 // --- 4. 軟體支援度資料 ---
@@ -137,9 +186,16 @@ const showCopyright = () => {
   });
 };
 
-onMounted(() => {
+onMounted(async () => {
+  setSeo({
+    title: '嘉樂秀圖網｜建材 PBR 材質貼圖與 3D 視覺化素材庫',
+    description: '嘉樂秀圖網提供木地板、磁磚、石材等建材 PBR 材質貼圖與 3D 視覺化素材，支援 Blender、D5 Render、Enscape、Lumion、Twinmotion 等渲染軟體。',
+    canonical: 'https://www.showpiece.com.tw/'
+  });
+
   startSlideShow();
-  fetchTrending(); 
+  await fetchTrending();
+  markPrerenderReady();
 });
 
 onUnmounted(() => {
@@ -166,19 +222,23 @@ onUnmounted(() => {
 
       <div class="absolute inset-0 z-20 flex items-center justify-center text-center px-4">
         <div class="max-w-4xl mx-auto w-full flex flex-col items-center">
-          <div class="relative w-full h-40 md:h-56 mb-8">
-            <div 
-              v-for="(slide, index) in heroSlides" 
+          <div class="mb-6">
+            <h1 class="text-4xl md:text-6xl font-bold text-white tracking-tight mb-4 drop-shadow-lg">
+              嘉樂秀圖網｜建材 PBR 材質貼圖與 3D 視覺化素材庫
+            </h1>
+            <p class="text-lg md:text-xl text-gray-100 max-w-3xl mx-auto leading-relaxed drop-shadow-md">
+              提供真實建材產品製作的 PBR 材質貼圖，協助建材商與設計師將木地板、磁磚、石材等素材應用於 3D 建築與室內設計渲染。
+            </p>
+          </div>
+          <div class="relative w-full h-24 md:h-28 mb-8">
+            <div
+              v-for="(slide, index) in heroSlides"
               :key="'text-' + slide.id"
               class="absolute inset-0 flex flex-col items-center justify-center transition-all duration-1000 ease-out"
               :class="index === currentSlide ? 'opacity-100 translate-y-0 delay-300' : 'opacity-0 translate-y-8 pointer-events-none'"
             >
-              <h1 class="text-4xl md:text-6xl font-bold text-white tracking-tight mb-4 drop-shadow-lg">
-                {{ slide.title }}
-              </h1>
-              <p class="text-lg md:text-xl text-gray-100 max-w-2xl mx-auto leading-relaxed drop-shadow-md">
-                {{ slide.subtitle }}
-              </p>
+              <h2 class="text-xl md:text-2xl font-bold text-white mb-2 drop-shadow-lg">{{ slide.title }}</h2>
+              <p class="text-sm md:text-base text-gray-100 max-w-2xl mx-auto leading-relaxed drop-shadow-md">{{ slide.subtitle }}</p>
             </div>
           </div>
           <!-- 按鈕改色：SketchUp Blue (#005eb8) -->
@@ -197,6 +257,7 @@ onUnmounted(() => {
         <button 
           v-for="(slide, index) in heroSlides" 
           :key="'dot-' + slide.id"
+          :aria-label="`切換至第 ${index + 1} 張展示圖`"
           @click="setSlide(index)"
           class="w-3 h-3 rounded-full transition-all duration-300 shadow-sm border border-white/30"
           :class="index === currentSlide ? 'bg-[#005eb8] w-8' : 'bg-white hover:bg-gray-200'"
@@ -209,7 +270,7 @@ onUnmounted(() => {
       <div class="container mx-auto px-6">
         <div class="text-center mb-16">
           <h2 class="text-3xl font-bold text-[#333] mb-4">關於網站</h2>
-          <p class="text-gray-600 max-w-2xl mx-auto">嘉樂秀圖網是由如藝印製品企業有限公司建立的平台。<br>我們的初衷是為服務本公司的客戶群，幫助客戶將產品轉換成 3D 建材檔。</p>
+          <p class="text-gray-600 max-w-2xl mx-auto">嘉樂秀圖網是由如藝印製品企業有限公司建立的建材數位素材平台。<br>我們將實際建材產品轉換為可用於 3D 建築與室內設計渲染的 PBR 材質貼圖，並保留產品品牌、尺寸與來源資訊。</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -241,13 +302,29 @@ onUnmounted(() => {
       </div>
     </section>
 
+    <!-- Phase 3：可爬取的材質分類入口 -->
+    <section class="py-14 bg-[#f9fafb] border-b border-gray-200">
+      <div class="container mx-auto px-6">
+        <div class="text-center mb-8">
+          <h2 class="text-3xl font-bold text-[#333] mb-3">依建材類型瀏覽 PBR 材質</h2>
+          <p class="text-gray-600">直接進入木地板、磁磚、石材與壁紙材質頁，尋找適合 3D 渲染與室內設計使用的素材。</p>
+        </div>
+        <nav aria-label="PBR 材質分類" class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+          <RouterLink to="/pbr/wood-floor" class="bg-white border border-gray-200 rounded-lg p-5 text-center font-bold text-gray-800 hover:border-[#005eb8] hover:text-[#005eb8] hover:shadow-md transition-all">木地板 PBR</RouterLink>
+          <RouterLink to="/pbr/tile" class="bg-white border border-gray-200 rounded-lg p-5 text-center font-bold text-gray-800 hover:border-[#005eb8] hover:text-[#005eb8] hover:shadow-md transition-all">磁磚 PBR</RouterLink>
+          <RouterLink to="/pbr/stone" class="bg-white border border-gray-200 rounded-lg p-5 text-center font-bold text-gray-800 hover:border-[#005eb8] hover:text-[#005eb8] hover:shadow-md transition-all">石材 PBR</RouterLink>
+          <RouterLink to="/pbr/wallpaper" class="bg-white border border-gray-200 rounded-lg p-5 text-center font-bold text-gray-800 hover:border-[#005eb8] hover:text-[#005eb8] hover:shadow-md transition-all">壁紙 PBR</RouterLink>
+        </nav>
+      </div>
+    </section>
+
     <!-- 3. Showcase -->
     <section class="py-20 bg-[#f9fafb]">
       <div class="container mx-auto px-6">
         <div class="flex justify-between items-end mb-10 border-b border-gray-300 pb-4">
           <div>
             <h2 class="text-3xl font-bold text-[#333] mb-2">最新上架材質</h2>
-            <p class="text-gray-600">社群創作者最愛使用的精選素材</p>
+            <p class="text-gray-600">收錄實際建材產品製作的最新 PBR 材質貼圖</p>
           </div>
           <RouterLink to="/pbr" class="text-[#005eb8] hover:text-[#004a91] font-semibold flex items-center gap-1 transition-colors">
             查看全部
@@ -264,7 +341,7 @@ onUnmounted(() => {
           <div 
             v-for="item in trendingMaterials" 
             :key="item.id" 
-            @click="goToDetail"
+            @click="goToDetail(item)"
             class="group flex flex-col bg-white rounded-lg border border-gray-200 hover:border-[#005eb8] shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden"
           >
             <!-- 1. 圖片區域：改為 flex 居中 + object-contain (完整顯示) -->
@@ -301,7 +378,7 @@ onUnmounted(() => {
       <div class="container mx-auto px-6">
         <div class="text-center mb-12">
           <h2 class="text-3xl font-bold text-[#333] mb-4">廣泛支援各大渲染引擎</h2>
-          <p class="text-gray-600">無論您使用哪種軟體，PBR Master 都能提供最佳的貼圖方案。</p>
+          <p class="text-gray-600">嘉樂秀圖網提供適用於多種 3D 渲染軟體的 PBR 材質貼圖。</p>
         </div>
 
         <div class="overflow-x-auto bg-white rounded-lg border border-gray-300 shadow-md">
@@ -347,11 +424,43 @@ onUnmounted(() => {
       </div>
     </section>
 
+    <!-- Phase 5: PBR 使用指南與長尾搜尋入口 -->
+    <section class="py-20 bg-[#f9fafb] border-t border-gray-200">
+      <div class="container mx-auto px-6">
+        <div class="text-center mb-12">
+          <h2 class="text-3xl font-bold text-[#333] mb-3">PBR 材質使用指南</h2>
+          <p class="text-gray-600 max-w-3xl mx-auto">了解 PBR 貼圖基礎，以及 Blender、D5 Render、Enscape、Lumion 等渲染軟體使用建材材質時的站內相容性資訊。</p>
+        </div>
+        <nav aria-label="PBR 使用指南" class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <RouterLink to="/guide/pbr-materials" class="bg-white border border-gray-200 rounded-lg p-5 hover:border-[#005eb8] hover:shadow-md transition-all">
+            <h3 class="font-bold text-gray-900 mb-2">PBR 材質基礎</h3>
+            <p class="text-sm text-gray-600">認識 Color、Normal、Roughness、AO 等常見貼圖。</p>
+          </RouterLink>
+          <RouterLink to="/guide/pbr-for-blender" class="bg-white border border-gray-200 rounded-lg p-5 hover:border-[#005eb8] hover:shadow-md transition-all">
+            <h3 class="font-bold text-gray-900 mb-2">Blender PBR</h3>
+            <p class="text-sm text-gray-600">以 Principled BSDF 為核心的 PBR 使用方向。</p>
+          </RouterLink>
+          <RouterLink to="/guide/pbr-for-d5-render" class="bg-white border border-gray-200 rounded-lg p-5 hover:border-[#005eb8] hover:shadow-md transition-all">
+            <h3 class="font-bold text-gray-900 mb-2">D5 Render PBR</h3>
+            <p class="text-sm text-gray-600">整理站內列出的主要 PBR maps 相容範圍。</p>
+          </RouterLink>
+          <RouterLink to="/guide/pbr-for-enscape" class="bg-white border border-gray-200 rounded-lg p-5 hover:border-[#005eb8] hover:shadow-md transition-all">
+            <h3 class="font-bold text-gray-900 mb-2">Enscape PBR</h3>
+            <p class="text-sm text-gray-600">優先使用 Base Color、Normal 與 Roughness。</p>
+          </RouterLink>
+          <RouterLink to="/guide/pbr-for-lumion" class="bg-white border border-gray-200 rounded-lg p-5 hover:border-[#005eb8] hover:shadow-md transition-all">
+            <h3 class="font-bold text-gray-900 mb-2">Lumion PBR</h3>
+            <p class="text-sm text-gray-600">整理主要 maps 與有限支援項目的使用方向。</p>
+          </RouterLink>
+        </nav>
+      </div>
+    </section>
+
     <!-- 6. Footer -->
     <!-- 改為深色頁尾但色調偏藍灰，或保持深黑作為視覺收尾 -->
     <footer class="bg-[#333333] py-10 text-white border-t border-gray-700">
       <div class="container mx-auto px-6 text-center">
-        <h2 class="text-2xl font-bold mb-4">PBR Master</h2>
+        <h2 class="text-2xl font-bold mb-4">嘉樂秀圖網</h2>
         <div class="flex justify-center items-center gap-6 text-gray-400 mb-8">
           <button @click="showCopyright" class="hover:text-white transition-colors text-sm font-medium border-b border-transparent hover:border-white pb-0.5">
             著作權聲明 (Copyright Notice)
@@ -362,7 +471,7 @@ onUnmounted(() => {
           </a>
         </div>
         <p class="text-gray-500 text-sm">
-          &copy; 2024 PBR Master. All rights reserved. 
+          &copy; 2024 嘉樂秀圖網. All rights reserved. 
           <br>Designed for Professionals.
         </p>
       </div>

@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import PayModal from '@/components/PayModal.vue';
 import { supabase } from '@/supabase'; 
@@ -8,9 +8,134 @@ import { useToast } from "vue-toastification";
 import Swal from 'sweetalert2';
 import { getR2DownloadLink } from '@/utils/r2';
 
+const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 const toast = useToast();
+
+// --- Phase 2：build 後預渲染完成訊號 ---
+// /pbr 必須等 Supabase 材質資料載入後才算完成，讓 build 時寫入完整材質 HTML。
+const markPrerenderReady = () => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-prerender-ready', 'true');
+  }
+};
+
+// --- SEO：Phase 1 ---
+const setSeo = ({ title, description, canonical }) => {
+  document.title = title;
+
+  const upsertMeta = (selector, attrs) => {
+    let el = document.head.querySelector(selector);
+    if (!el) {
+      el = document.createElement('meta');
+      document.head.appendChild(el);
+    }
+    Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value));
+  };
+
+  const upsertCanonical = (href) => {
+    let el = document.head.querySelector('link[rel="canonical"]');
+    if (!el) {
+      el = document.createElement('link');
+      el.setAttribute('rel', 'canonical');
+      document.head.appendChild(el);
+    }
+    el.setAttribute('href', href);
+  };
+
+  upsertMeta('meta[name="description"]', { name: 'description', content: description });
+  upsertMeta('meta[property="og:title"]', { property: 'og:title', content: title });
+  upsertMeta('meta[property="og:description"]', { property: 'og:description', content: description });
+  upsertMeta('meta[property="og:type"]', { property: 'og:type', content: 'website' });
+  upsertMeta('meta[property="og:url"]', { property: 'og:url', content: canonical });
+  upsertMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: 'summary_large_image' });
+  upsertCanonical(canonical);
+};
+
+
+// --- Phase 3：可索引分類頁設定 ---
+// aliases 必須對應 Supabase materials.category 實際會出現的文字。
+// 若資料庫使用其他分類名稱，只需要調整 aliases，不必改 URL。
+const CATEGORY_CONFIG = {
+  'wood-floor': {
+    label: '木地板',
+    aliases: ['木地板'],
+    title: '木地板 PBR 材質貼圖下載｜嘉樂秀圖網',
+    description: '瀏覽木地板 PBR 材質貼圖與實際建材系列，提供 1K、2K、4K 素材，適用 Blender、D5 Render、Enscape、Lumion、Twinmotion 等 3D 渲染軟體。',
+    intro: '收錄實際木地板產品製作的 PBR 材質貼圖，可用於室內設計、空間提案與建築視覺化。',
+  },
+  tile: {
+    label: '磁磚',
+    aliases: ['磁磚', '磁砖', '瓷磚', '瓷砖'],
+    title: '磁磚 PBR 材質貼圖下載｜嘉樂秀圖網',
+    description: '瀏覽磁磚與瓷磚 PBR 材質貼圖，提供 1K、2K、4K 素材與產品系列資訊，適用室內設計及 Blender、D5 Render、Enscape、Lumion 等渲染工作流程。',
+    intro: '收錄磁磚與瓷磚建材的 PBR 材質貼圖，方便設計師在 3D 空間中呈現實際建材效果。',
+  },
+  stone: {
+    label: '石材',
+    aliases: ['石材', '大理石', '花崗岩', '花岗岩'],
+    title: '石材 PBR 材質貼圖下載｜嘉樂秀圖網',
+    description: '瀏覽石材、大理石與花崗岩 PBR 材質貼圖，提供建築與室內設計所需的 1K、2K、4K 材質素材與產品資訊。',
+    intro: '收錄石材、大理石與花崗岩等建材 PBR 貼圖，適用室內、商空與建築視覺化。',
+  },
+  wallpaper: {
+    label: '壁紙',
+    aliases: ['壁紙', '壁纸', '壁布'],
+    title: '壁紙 PBR 材質貼圖下載｜嘉樂秀圖網',
+    description: '瀏覽壁紙與壁布 PBR 材質貼圖，提供 1K、2K、4K 素材，可用於 Blender、D5 Render、Enscape、Lumion 等室內設計與建築視覺化軟體。',
+    intro: '收錄壁紙與壁布產品的 PBR 材質貼圖，讓實際花色能直接進入 3D 設計與提案流程。',
+  },
+};
+
+const categorySlug = computed(() => String(route.params.categorySlug || ''));
+const activeCategory = computed(() => CATEGORY_CONFIG[categorySlug.value] || null);
+
+const pageSeo = computed(() => {
+  if (activeCategory.value) {
+    return {
+      title: activeCategory.value.title,
+      description: activeCategory.value.description,
+      canonical: `https://www.showpiece.com.tw/pbr/${categorySlug.value}`,
+    };
+  }
+
+  return {
+    title: 'PBR 材質庫｜木地板、磁磚、石材材質下載－嘉樂秀圖網',
+    description: '免費瀏覽與下載木地板、磁磚、石材等建築與室內設計 PBR 材質貼圖，提供 1K、2K、4K 素材並支援 Blender、D5 Render、Enscape、Lumion、Twinmotion。',
+    canonical: 'https://www.showpiece.com.tw/pbr',
+  };
+});
+
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+// --- Phase 4：穩定商品 URL ---
+// ID 負責穩定識別；名稱 slug 只負責讓 URL 更可讀。
+const slugify = (value) => {
+  const normalized = String(value || 'material')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || 'material';
+};
+
+const productRouteFor = (item) => {
+  const id = item.type === 'variant' ? item.parentId : item.id;
+  const name = item.type === 'variant' ? item.parentName : item.name;
+  return `/pbr/product/${id}/${slugify(name)}`;
+};
+const matchesActiveCategory = (item) => {
+  if (!activeCategory.value) return true;
+  const category = normalizeText(item.category);
+  return activeCategory.value.aliases.some(alias => category.includes(normalizeText(alias)));
+};
+
+const categoryCount = (config) => rawMaterials.value.filter(item => {
+  const category = normalizeText(item.category);
+  return config.aliases.some(alias => category.includes(normalizeText(alias)));
+}).length;
 
 const rawMaterials = ref([]); // 原始資料 (以產品 Parent 為主)
 const isLoading = ref(true);     
@@ -74,29 +199,43 @@ const fetchMaterials = async () => {
   }
 };
 
-onMounted(() => {
-  fetchMaterials();
+const applyCurrentSeo = () => setSeo(pageSeo.value);
+
+onMounted(async () => {
+  applyCurrentSeo();
+  await fetchMaterials();
+  markPrerenderReady();
+});
+
+watch(categorySlug, () => {
+  searchQuery.value = '';
+  closeDetail();
+  applyCurrentSeo();
 });
 
 onUnmounted(() => {
-  document.body.style.overflow = ''; 
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = '';
+  }
 });
 
 // --- 2. 搜尋與混合顯示邏輯 (修改點：加入 Category 搜尋) ---
 const searchQuery = ref('');
 
+const categoryMaterials = computed(() => rawMaterials.value.filter(matchesActiveCategory));
+
 const displayItems = computed(() => {
   const term = searchQuery.value.toLowerCase().trim();
 
-  // 情況 A：沒有搜尋 -> 顯示「產品系列 (Parents)」
+  // 沒有搜尋：顯示目前分類中的產品系列。
   if (!term) {
-    return rawMaterials.value;
+    return categoryMaterials.value;
   }
 
-  // 情況 B：有搜尋 -> 攤平並顯示符合的「變體 (Variants)」
+  // 有搜尋：只搜尋目前分類，並攤平成符合的變體。
   const results = [];
 
-  rawMaterials.value.forEach(parent => {
+  categoryMaterials.value.forEach(parent => {
     if (parent.variants && parent.variants.length > 0) {
       parent.variants.forEach(variant => {
         // [修改重點] 搜尋邏輯：檢查 變體代號 OR 產品名稱 OR 廠商 OR 材質分類
@@ -269,8 +408,12 @@ const onPaymentSuccess = (itemId) => {
     <div class="max-w-7xl mx-auto mb-10 space-y-6">
       <div class="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h1 class="text-3xl font-bold text-[#333] mb-2">PBR 材質庫</h1>
-          <p class="text-gray-600">精選高品質建築與室內設計材質</p>
+          <h1 class="text-3xl font-bold text-[#333] mb-2">
+            {{ activeCategory ? `${activeCategory.label} PBR 材質貼圖` : '免費建材 PBR 材質貼圖庫' }}
+          </h1>
+          <p class="text-gray-600 max-w-3xl leading-relaxed">
+            {{ activeCategory ? activeCategory.intro : '提供木地板、磁磚、石材等建築與室內設計 PBR 材質貼圖，可用於 Blender、D5 Render、Enscape、Lumion、Twinmotion 與 Unreal Engine 等 3D 渲染工作流程。' }}
+          </p>
         </div>
         <div class="relative w-full md:w-auto">
           <!-- 搜尋欄：白底灰框，專注時藍色邊框 -->
@@ -283,6 +426,26 @@ const onPaymentSuccess = (itemId) => {
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-3 top-2.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </div>
       </div>
+
+      <!-- Phase 3：真正可被搜尋引擎爬取的分類連結 -->
+      <nav aria-label="PBR 材質分類" class="flex flex-wrap gap-2">
+        <RouterLink
+          to="/pbr"
+          class="px-4 py-2 rounded-full border text-sm font-semibold transition-colors"
+          :class="!activeCategory ? 'bg-[#005eb8] text-white border-[#005eb8]' : 'bg-white text-gray-700 border-gray-300 hover:border-[#005eb8] hover:text-[#005eb8]'"
+        >
+          全部材質 <span class="opacity-70">({{ rawMaterials.length }})</span>
+        </RouterLink>
+        <RouterLink
+          v-for="(config, slug) in CATEGORY_CONFIG"
+          :key="slug"
+          :to="`/pbr/${slug}`"
+          class="px-4 py-2 rounded-full border text-sm font-semibold transition-colors"
+          :class="categorySlug === slug ? 'bg-[#005eb8] text-white border-[#005eb8]' : 'bg-white text-gray-700 border-gray-300 hover:border-[#005eb8] hover:text-[#005eb8]'"
+        >
+          {{ config.label }} <span class="opacity-70">({{ categoryCount(config) }})</span>
+        </RouterLink>
+      </nav>
     </div>
 
     <!-- Loading & Error -->
@@ -297,68 +460,85 @@ const onPaymentSuccess = (itemId) => {
 
     <!-- Grid List -->
     <div v-else class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      <!-- 卡片：白底 + 淺灰邊框 + 陰影 -->
-      <div 
-        v-for="item in displayItems" 
-        :key="item.type === 'parent' ? item.id : item.id" 
-        class="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-lg hover:border-[#005eb8] transition-all duration-300 group cursor-pointer animate-fadeIn flex flex-col overflow-hidden" 
-        @click="openDetail(item)"
+      <!-- Phase 4：商品卡片提供真正的可爬取 URL；Modal 保留作為快速預覽。 -->
+      <article
+        v-for="item in displayItems"
+        :key="item.id"
+        class="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-lg hover:border-[#005eb8] transition-all duration-300 group animate-fadeIn flex flex-col overflow-hidden"
       >
-        
-        <!-- 圖片區域：留白背景 -->
-        <div class="relative aspect-square bg-white border-b border-gray-100 p-4 flex items-center justify-center">
-          <img 
-            :src="item.image" 
-            :alt="item.name || item.code" 
-            class="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-105" 
-            @error="$event.target.src = 'https://placehold.co/600x400?text=No+Image'"
-          >
-          <!-- Premium 標籤 -->
-          <div class="absolute top-2 right-2">
-             <span v-if="item.isPremium" class="bg-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">PREMIUM</span>
+        <RouterLink :to="productRouteFor(item)" class="block" :aria-label="`查看 ${item.type === 'variant' ? item.parentName : item.name} 完整材質資料`">
+          <div class="relative aspect-square bg-white border-b border-gray-100 p-4 flex items-center justify-center">
+            <img
+              :src="item.image"
+              :alt="item.type === 'variant' ? `${item.parentName} ${item.code} PBR 材質` : `${item.name} ${item.category || ''} PBR 材質`"
+              class="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-105"
+              @error="$event.target.src = 'https://placehold.co/600x400?text=No+Image'"
+            >
+            <div class="absolute top-2 right-2">
+              <span v-if="item.isPremium" class="bg-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">PREMIUM</span>
+            </div>
           </div>
-        </div>
+        </RouterLink>
 
         <div class="p-4 flex-1 flex flex-col bg-white">
-          <!-- Variant Mode -->
           <template v-if="item.type === 'variant'">
-            <div class="flex items-start justify-between mb-1">
+            <RouterLink :to="productRouteFor(item)" class="hover:text-[#005eb8] transition-colors">
               <h3 class="text-lg font-bold text-gray-800">{{ item.code }}</h3>
-            </div>
-            <p class="text-sm text-gray-500 mb-2 truncate">{{ item.parentName }}</p>
-            
-            <p v-if="item.parentCategory" class="text-xs text-[#005eb8] bg-blue-50 px-2 py-0.5 rounded w-fit mb-3">
-              {{ item.parentCategory }}
-            </p>
-            
-            <div class="mt-auto">
-               <button class="w-full py-2 bg-white border border-[#005eb8] text-[#005eb8] font-bold rounded hover:bg-[#005eb8] hover:text-white transition-colors text-sm">
-                  下載檔案
-               </button>
-            </div>
+              <p class="text-sm text-gray-500 mb-2 truncate">{{ item.parentName }}</p>
+            </RouterLink>
+            <p v-if="item.parentCategory" class="text-xs text-[#005eb8] bg-blue-50 px-2 py-0.5 rounded w-fit mb-3">{{ item.parentCategory }}</p>
           </template>
 
-          <!-- Parent Mode -->
           <template v-else>
-            <div class="flex items-start justify-between mb-1">
-              <h3 class="text-lg font-bold text-gray-800 truncate">{{ item.name }}</h3>
-              <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{{ item.variants.length }} 色</span>
+            <div class="flex items-start justify-between gap-2 mb-1">
+              <RouterLink :to="productRouteFor(item)" class="min-w-0 hover:text-[#005eb8] transition-colors">
+                <h3 class="text-lg font-bold text-gray-800 truncate">{{ item.name }}</h3>
+              </RouterLink>
+              <span class="shrink-0 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{{ item.variants.length }} 色</span>
             </div>
             <p class="text-sm text-gray-500 mb-3">{{ item.category }}</p>
-            <div class="mt-auto">
-               <button class="w-full py-2 bg-gray-100 text-gray-600 font-bold rounded group-hover:bg-[#005eb8] group-hover:text-white transition-colors text-sm">
-                  查看系列
-               </button>
-            </div>
           </template>
+
+          <div class="mt-auto grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              @click="openDetail(item)"
+              class="py-2 bg-gray-100 text-gray-700 font-bold rounded hover:bg-gray-200 transition-colors text-sm"
+            >
+              快速預覽
+            </button>
+            <RouterLink
+              :to="productRouteFor(item)"
+              class="py-2 bg-white border border-[#005eb8] text-[#005eb8] font-bold rounded hover:bg-[#005eb8] hover:text-white transition-colors text-sm text-center"
+            >
+              完整資料
+            </RouterLink>
+          </div>
         </div>
-      </div>
+      </article>
 
       <div v-if="displayItems.length === 0" class="col-span-full py-20 text-center">
-        <h3 class="text-xl font-bold text-gray-800 mb-2">找不到符合 "{{ searchQuery }}" 的材質</h3>
-        <button @click="searchQuery = ''" class="text-[#005eb8] hover:underline font-medium">清除搜尋</button>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">{{ searchQuery ? `找不到符合「${searchQuery}」的材質` : `目前尚無${activeCategory?.label || '此分類'}材質` }}</h3>
+        <button v-if="searchQuery" @click="searchQuery = ''" class="text-[#005eb8] hover:underline font-medium">清除搜尋</button>
       </div>
     </div>
+
+    <!-- Phase 5: Guide internal links -->
+    <section class="max-w-7xl mx-auto mt-16 bg-white border border-gray-200 rounded-xl p-6 md:p-8 shadow-sm">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">不知道 PBR 貼圖怎麼用？</h2>
+          <p class="text-gray-600">先看 PBR 基礎，或依你使用的渲染軟體查看站內相容性指南。</p>
+        </div>
+        <nav aria-label="PBR 使用指南" class="flex flex-wrap gap-2">
+          <RouterLink to="/guide/pbr-materials" class="px-4 py-2 rounded border border-gray-300 bg-white text-gray-700 hover:border-[#005eb8] hover:text-[#005eb8]">PBR 基礎</RouterLink>
+          <RouterLink to="/guide/pbr-for-blender" class="px-4 py-2 rounded border border-gray-300 bg-white text-gray-700 hover:border-[#005eb8] hover:text-[#005eb8]">Blender</RouterLink>
+          <RouterLink to="/guide/pbr-for-d5-render" class="px-4 py-2 rounded border border-gray-300 bg-white text-gray-700 hover:border-[#005eb8] hover:text-[#005eb8]">D5 Render</RouterLink>
+          <RouterLink to="/guide/pbr-for-enscape" class="px-4 py-2 rounded border border-gray-300 bg-white text-gray-700 hover:border-[#005eb8] hover:text-[#005eb8]">Enscape</RouterLink>
+          <RouterLink to="/guide/pbr-for-lumion" class="px-4 py-2 rounded border border-gray-300 bg-white text-gray-700 hover:border-[#005eb8] hover:text-[#005eb8]">Lumion</RouterLink>
+        </nav>
+      </div>
+    </section>
 
     <!-- Smart Modal -->
     <div v-if="isModalOpen" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
@@ -373,7 +553,7 @@ const onPaymentSuccess = (itemId) => {
         <!-- Mode A: Single Variant -->
         <div v-if="selectedItem.type === 'variant'" class="flex flex-col md:flex-row min-h-[400px]">
           <div class="md:w-1/2 bg-gray-50 p-8 flex items-center justify-center border-r border-gray-100">
-             <img :src="selectedItem.image" class="max-w-full max-h-[400px] object-contain drop-shadow-lg" @error="$event.target.src = 'https://placehold.co/600x400?text=No+Image'">
+             <img :src="selectedItem.image" :alt="`${selectedItem.brand || ''} ${selectedItem.parentName || selectedItem.name || ''} ${selectedItem.code || ''} PBR 材質`" class="max-w-full max-h-[400px] object-contain drop-shadow-lg" @error="$event.target.src = 'https://placehold.co/600x400?text=No+Image'">
           </div>
           <div class="md:w-1/2 p-8 flex flex-col justify-center text-gray-800">
              <span class="text-[#005eb8] font-bold tracking-wider text-sm mb-1">{{ selectedItem.brand }}</span>
@@ -384,6 +564,8 @@ const onPaymentSuccess = (itemId) => {
              <div class="bg-blue-50/50 p-4 rounded-lg mb-8 text-sm text-gray-600 border border-blue-100">
                 {{ selectedItem.description || '暫無描述' }}
              </div>
+
+             <RouterLink :to="productRouteFor(selectedItem)" @click="closeDetail" class="mb-4 inline-flex justify-center px-5 py-3 bg-[#005eb8] text-white rounded font-bold hover:bg-[#004a91] transition-colors">查看完整產品頁</RouterLink>
 
              <div class="grid grid-cols-1 gap-3">
                 <button v-for="res in ['1K', '2K', '4K']" :key="res" @click="handleDownload(selectedItem, null, res)" class="flex items-center justify-between w-full px-6 py-3 border border-gray-300 rounded hover:border-[#005eb8] hover:bg-[#005eb8] transition-all text-gray-700 hover:text-white font-bold group">
@@ -398,7 +580,7 @@ const onPaymentSuccess = (itemId) => {
         <div v-else>
            <div class="flex flex-col lg:flex-row border-b border-gray-200">
              <div class="lg:w-1/2 h-64 lg:h-auto bg-white flex items-center justify-center p-4 border-r border-gray-100">
-               <img :src="selectedItem.image" class="max-w-full max-h-full object-contain" @error="$event.target.src = 'https://placehold.co/600x400?text=No+Image'">
+               <img :src="selectedItem.image" :alt="`${selectedItem.brand || ''} ${selectedItem.name || ''} ${selectedItem.category || ''} PBR 材質`" class="max-w-full max-h-full object-contain" @error="$event.target.src = 'https://placehold.co/600x400?text=No+Image'">
              </div>
              <div class="lg:w-1/2 p-8 lg:p-12 text-gray-800">
                <h2 class="text-3xl font-bold text-gray-900 mb-2">{{ selectedItem.name }}</h2>
@@ -412,11 +594,12 @@ const onPaymentSuccess = (itemId) => {
            </div>
            
            <div class="p-8 bg-[#f9fafb]">
+             <RouterLink :to="productRouteFor(selectedItem)" @click="closeDetail" class="mb-6 inline-flex px-5 py-3 bg-[#005eb8] text-white rounded font-bold hover:bg-[#004a91] transition-colors">查看完整產品頁</RouterLink>
              <h3 class="text-xl font-bold text-gray-800 mb-6 border-l-4 border-[#005eb8] pl-3">全系列下載 ({{ selectedItem.variants.length }}色)</h3>
              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                <div v-for="variant in selectedItem.variants" :key="variant.id" class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
                  <div class="aspect-square bg-white mb-4 rounded overflow-hidden flex items-center justify-center p-2">
-                   <img :src="variant.image" class="max-w-full max-h-full object-contain" @error="$event.target.src = 'https://placehold.co/400x400?text=No+Image'">
+                   <img :src="variant.image" :alt="`${selectedItem.brand || ''} ${selectedItem.name || ''} ${variant.code || ''} PBR 材質`" class="max-w-full max-h-full object-contain" @error="$event.target.src = 'https://placehold.co/400x400?text=No+Image'">
                  </div>
                  <h4 class="font-bold text-gray-800 text-center mb-4">{{ variant.code }}</h4>
                  <div class="flex justify-between gap-2">

@@ -39,6 +39,21 @@ const router = createRouter({
       name: 'update-password',
       component: UpdatePasswordView,
       meta: { requiresAuth: true } // 因為點連結後 Supabase 會自動登入，所以這裡設保護沒問題
+    },
+    {
+      path: '/pbr/product/:productId/:productSlug?',
+      name: 'pbr-product',
+      component: () => import('@/views/ProductDetail.vue')
+    },
+    {
+      path: '/pbr/:categorySlug(wood-floor|tile|stone|wallpaper)',
+      name: 'pbr-category',
+      component: () => import('@/views/PbrLibrary.vue')
+    },
+    {
+      path: '/guide/:guideSlug(pbr-materials|pbr-for-blender|pbr-for-d5-render|pbr-for-enscape|pbr-for-lumion)',
+      name: 'pbr-guide',
+      component: () => import('@/views/GuideView.vue')
     }
   ],
   scrollBehavior(to, from, savedPosition) {
